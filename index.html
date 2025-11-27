@@ -77,7 +77,7 @@
             'Bacayan',  
             'Lapu-lapu',  
             'AS Fortuna',
-            'Home Service' // RE-ADDED: Home Service as a branch option
+            'Home Service' // Retained for login flexibility, though internal selection is preferred
         ];
         
         // --- FIREBASE CONFIGURATION (Reverted to Hardcoded) ---
@@ -599,7 +599,10 @@
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
                 notes: '',
-                category: '' // Used for Expense reason
+                category: '', // Used for Expense reason
+                // NEW HOME SERVICE FIELDS
+                locationType: 'In-Spa', 
+                transpoCharge: '' // Use string for input consistency
             });
             const [modal, setModal] = useState({
                 isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red'
@@ -1405,7 +1408,8 @@
                 setFormData({  
                     ...formData,  
                     service: serviceName,
-                    amount: newPrice  
+                    amount: newPrice,
+                    transpoCharge: '' // Clear transpo charge if service changes
                 });
             };
 
@@ -1416,7 +1420,8 @@
                 setFormData({  
                     ...formData,  
                     duration: durationName,
-                    amount: newPrice  
+                    amount: newPrice,
+                    transpoCharge: '' // Clear transpo charge if duration changes
                 });
             };
 
@@ -1425,6 +1430,9 @@
                 e.preventDefault();
                 const transactionType = typeOverride || formData.type;
                 const transactionBranch = user.currentBranch === 'ALL' ? formData.targetBranch : user.currentBranch;
+
+                const transpoChargeValue = parseFloat(formData.transpoCharge) || 0;
+                const isHomeService = formData.locationType === 'Home Service';
 
                 if (user.currentBranch === 'ALL' && !formData.targetBranch) {
                     setModal({ isOpen: true, type: 'alert', title: 'Missing Branch', message: 'Please select a Target Branch.', onConfirm: closeModal, confirmColor: 'red' });
@@ -1442,6 +1450,12 @@
                         return;
                     }
 
+                    // NEW: Home Service validation
+                    if (isHomeService && (formData.transpoCharge === '' || transpoChargeValue <= 0)) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Missing Charge', message: 'Home Service requires a Transportation Charge greater than 0.', onConfirm: closeModal, confirmColor: 'red' });
+                        return;
+                    }
+
                     // VALIDATION: Check for conflicts (Same Therapist at Exact Same Time)
                     const allBookings = [...transactions, ...offlineQueue];
                     const isConflict = allBookings.some(t =>  
@@ -1456,10 +1470,15 @@
                     }
                 }
                 
-                let amountValue = parseFloat(formData.amount);
+                // Calculate base amount and adjust for expense/transpo
+                let basePrice = parseFloat(formData.amount);
+                let amountValue = basePrice;
+
                 if (transactionType === 'expense') {
-                    // Expenses must be stored as negative numbers for easy calculation
                     amountValue = -Math.abs(amountValue);
+                } else if (isHomeService) {
+                    // Add transportation charge to the total amount
+                    amountValue += transpoChargeValue; 
                 }
 
                 // Payload
@@ -1469,7 +1488,10 @@
                     service: formData.service,
                     category: formData.category, // Used for expense category
                     therapist: formData.therapist,
-                    amount: amountValue,
+                    amount: amountValue, // Total amount
+                    basePrice: basePrice, // Store base price separately for breakdown
+                    transpoCharge: isHomeService ? transpoChargeValue : 0, // Store charge separately
+                    locationType: formData.locationType, // Store location type
                     duration: formData.duration,
                     type: transactionType,
                     status: transactionType === 'expense' ? 'completed' : (transactionType === 'sale' ? 'completed' : 'pending'),
@@ -1492,7 +1514,8 @@
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
                         type: 'booking', time: new Date().toTimeString().slice(0, 5),  
-                        targetBranch: resetTargetBranch, notes: '', category: ''
+                        targetBranch: resetTargetBranch, notes: '', category: '',
+                        locationType: 'In-Spa', transpoCharge: '' // Reset new fields
                     });
 
                     setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} queued. Will sync when online.`, onConfirm: closeModal, confirmColor: 'orange' });
@@ -1513,7 +1536,8 @@
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
                         type: 'booking', time: new Date().toTimeString().slice(0, 5),
-                        targetBranch: resetTargetBranch, notes: '', category: ''
+                        targetBranch: resetTargetBranch, notes: '', category: '',
+                        locationType: 'In-Spa', transpoCharge: '' // Reset new fields
                     });
                     
                     setModal({ isOpen: true, type: 'alert', title: 'Record Saved!', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`, onConfirm: closeModal, confirmColor: 'logo-green' });
@@ -2059,6 +2083,10 @@
                                                     {/* Displaying timestamp date for consistency */}
                                                     <div className="flex gap-2 mb-1 items-center">
                                                         <span className="text-[10px] font-bold bg-slate-100 px-2 rounded text-slate-500">{t.branch}</span>
+                                                        {/* NEW: Location Type Label */}
+                                                        {t.locationType && t.locationType !== 'In-Spa' && (
+                                                            <span className="text-[10px] font-bold bg-teal-100 px-2 rounded text-teal-700">{t.locationType}</span>
+                                                        )}
                                                         <span className="text-xs font-mono text-slate-400">{formatDate(t.timestamp)} - {t.time}</span>
                                                     </div>
                                                     
@@ -2089,6 +2117,12 @@
                                                 
                                                 <div className="text-right min-w-[80px]">
                                                     <div className={`font-bold text-lg ${t.type === 'expense' ? 'text-red-600' : (t.status==='completed'?'text-logo-green-700':'text-orange-600')}`}>{formatCurrency(t.amount)}</div>
+                                                    {/* NEW: Display Breakdown if Home Service */}
+                                                    {t.locationType === 'Home Service' && t.transpoCharge > 0 && (
+                                                        <div className="text-[9px] text-slate-500 mt-0.5">
+                                                            ({formatCurrency(t.basePrice || 0)} Base + {formatCurrency(t.transpoCharge)} Transpo)
+                                                        </div>
+                                                    )}
                                                     <div className="flex justify-end gap-2 mt-1">
                                                         {t.type !== 'expense' && (
                                                             <button onClick={()=>toggleStatus(t)} className={`p-1.5 rounded-full ${t.status==='completed'?'bg-logo-green-100 text-logo-green-700':'bg-orange-100 text-orange-600'}`}>
@@ -2133,6 +2167,21 @@
                                         <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='booking'?'border-logo-green-700 bg-logo-green-50/50':'border-slate-100'}`}><input type="radio" name="type" value="booking" checked={formData.type==='booking'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.Calendar/><span className="text-sm font-bold">Appointment</span></label>
                                         <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='sale'?'border-teal-600 bg-teal-50/50':'border-slate-100'}`}><input type="radio" name="type" value="sale" checked={formData.type==='sale'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.DollarSign/><span className="text-sm font-bold">Direct Pay</span></label>
                                     </div>
+                                    
+                                    {/* Location Type Selector */}
+                                    <div className="flex gap-2 col-span-2">
+                                        <label className={`flex-1 border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.locationType === 'In-Spa' ? 'border-logo-green-700 bg-logo-green-50/50' : 'border-slate-100'}`}>
+                                            <input type="radio" name="locationType" value="In-Spa" checked={formData.locationType === 'In-Spa'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value, transpoCharge: '' })} className="hidden"/>
+                                            <Icons.Home size={20}/>
+                                            <span className="text-sm font-bold">In-Spa/Clinic</span>
+                                        </label>
+                                        <label className={`flex-1 border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.locationType === 'Home Service' ? 'border-teal-600 bg-teal-50/50' : 'border-slate-100'}`}>
+                                            <input type="radio" name="locationType" value="Home Service" checked={formData.locationType === 'Home Service'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value })} className="hidden"/>
+                                            <Icons.User size={20}/>
+                                            <span className="text-sm font-bold">Home Service</span>
+                                        </label>
+                                    </div>
+
                                     <input required placeholder="Client Name*" value={formData.clientName} onChange={e=>setFormData({...formData, clientName:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     
                                     <div className="space-y-4">
@@ -2168,14 +2217,27 @@
                                         {/* Price is now editable and required, auto-filled by service selection */}
                                         <input required  
                                             type="number" step="0.01"  
-                                            placeholder="Price (P)*"  
+                                            placeholder="Base Price (P)*"  
                                             value={formData.amount}  
                                             onChange={e=>setFormData({...formData, amount:e.target.value})}  
                                             className="w-full p-3 border rounded-xl bg-slate-50"
                                         />
                                         <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     </div>
-                                    <button className="w-full bg-logo-green-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2">Save Booking</button>
+                                    
+                                    {/* Conditional Transportation Charge Input */}
+                                    {formData.locationType === 'Home Service' && (
+                                        <input required  
+                                            type="number" step="0.01"  
+                                            min="0.01"
+                                            placeholder="Transportation Charge (P)*"  
+                                            value={formData.transpoCharge}  
+                                            onChange={e=>setFormData({...formData, transpoCharge:e.target.value})}  
+                                            className="w-full p-3 border rounded-xl bg-slate-100 border-teal-300 font-bold col-span-2"
+                                        />
+                                    )}
+
+                                    <button className="w-full bg-logo-green-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2 col-span-2">Save Booking</button>
                                 </form>
                             </div>
                         )}
@@ -2199,7 +2261,7 @@
                                                 <option value="" disabled>SELECT BRANCH AFFECTED*</option>
                                                 {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
                                             </select>
-                                            <Icons.ChevronDown size={16} className="absolute right-3 top-4 text-slate-400 pointer-events-none"/>
+                                            <Icons.ChevronDown size={16} className="absolute right-3 top-3.5 text-slate-400 pointer-events-none"/>
                                         </div>
                                     ) : (
                                         <div className="p-3 bg-red-50 rounded-lg text-sm text-red-800 font-medium flex items-center gap-2"><Icons.MapPin size={16}/> Logging for: {user.currentBranch}</div>
