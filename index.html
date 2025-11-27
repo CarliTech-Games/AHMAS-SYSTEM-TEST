@@ -1841,23 +1841,26 @@
 
             // --- RENDER ---
 
-            if (configError) return (
-                <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-center p-4">
-                    <div className="bg-white p-8 rounded-xl shadow-lg max-w-md">
-                        <Icons.Cloud size={48} className="mx-auto text-slate-400 mb-4"/>
-                        <h2 className="text-xl font-bold text-slate-800 mb-2">Setup Failed</h2>
-                        <p className="text-slate-500 text-sm mb-6 font-mono bg-slate-50 p-2 rounded border text-left text-xs">{configError}</p>
-                        <p className="text-xs text-slate-400">
-                            Check the console for detailed Firebase connection errors.
-                        </p>
-                    </div>
+            // NEW: Initial loading check only waits for Firebase client to be initialized
+            if (!fb) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 fade-in">
+                    <div className="loader mb-4"></div>
+                    <p className="text-slate-400 text-sm">Connecting to Spa Cloud...</p>
                 </div>
             );
 
-            if (!dbReady && fb) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><div className="loader mb-4"></div><p className="text-slate-400 text-sm">Connecting to Spa Cloud...</p></div>;
-
-            // LOGIN SCREEN
+            // LOGIN SCREEN: Must wait for user list to be loaded before showing login form
             if (!user) {
+                if (users.length === 0) {
+                    // Show a second loading state while waiting for essential user data
+                    return (
+                        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 fade-in">
+                            <div className="loader mb-4"></div>
+                            <p className="text-slate-400 text-sm">Loading user credentials...</p>
+                        </div>
+                    );
+                }
+                
                 return (
                     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 fade-in relative">
                         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-logo-green-100 text-center relative overflow-hidden">
@@ -2072,7 +2075,11 @@
                                         </div>
                                     )}
 
-                                    {filteredTransactions.length===0?<div className="text-center py-12 border border-dashed rounded-xl text-slate-400 text-sm">No records found for the current filter.</div>:
+                                    {filteredTransactions.length===0?
+                                        <div className="text-center py-12 border border-dashed rounded-xl text-slate-400 text-sm">
+                                            {dbReady ? 'No records found for the current filter.' : 'Loading live transactions...'}
+                                        </div>
+                                    :
                                     <div className="space-y-3">
                                         {filteredTransactions.map(t=>(
                                             // UPDATED: Conditional styling based on type
