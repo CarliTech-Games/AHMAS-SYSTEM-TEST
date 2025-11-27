@@ -79,34 +79,22 @@
             'AS Fortuna'
         ];
         
-        // --- FIREBASE CONFIGURATION (Using Canvas Globals) ---
-        let firebaseConfig = null;
-        let currentAppId = 'default-app-id';
-        let initialAuthToken = '';
-
-        try {
-            if (typeof __firebase_config !== 'undefined') {
-                firebaseConfig = JSON.parse(__firebase_config);
-            } else {
-                console.warn("Global __firebase_config not found. Using fallback config.");
-                // Minimal Fallback for development if globals aren't present
-                firebaseConfig = { projectId: 'ahmas-tracker-fallback' }; 
-            }
-        } catch (e) {
-            console.error("Error parsing __firebase_config:", e);
-            firebaseConfig = { projectId: 'parsing-error' };
-        }
-
-        if (typeof __app_id !== 'undefined') {
-            currentAppId = __app_id;
-        } else {
-            currentAppId = firebaseConfig.projectId; // Fallback to projectId
-        }
-
-        if (typeof __initial_auth_token !== 'undefined') {
-            initialAuthToken = __initial_auth_token;
-        }
-        // --- END FIREBASE CONFIGURATION ---
+        // --- FIREBASE CONFIGURATION (Reverted to Hardcoded) ---
+        const MANUAL_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyAKXcZwKtFBRFvGbOKd0UnQrLuOLt7wV9M",
+            authDomain: "ahmas-tracker.firebaseapp.com",
+            projectId: "ahmas-tracker",
+            storageBucket: "ahmas-tracker.firebasestorage.app",
+            messagingSenderId: "6650730194",
+            appId: "1:6650730194:web:eedf9c5bcb25cfe12ebf0b",
+            measurementId: "G-XW2GZJXN08"
+        };
+        
+        const firebaseConfig = MANUAL_FIREBASE_CONFIG;
+        // The current app ID must match the projectId for Firestore paths to work correctly.
+        const currentAppId = firebaseConfig.projectId;
+        // The original code used anonymous login, so we will not pass an initial token.
+        // This is the original behavior intended by the user.
 
 
         // --- ICON COMPONENT ---
@@ -318,7 +306,7 @@
                         <h3 className="font-bold mb-4 flex items-center gap-2 text-sm uppercase tracking-wide text-slate-500"><Icons.Plus size={16}/> Add New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h3>
                         <form onSubmit={handleFormSubmit} className="flex flex-col gap-3">
                             <div className="flex gap-2">
-                                <input 
+                                <input  
                                     required  
                                     placeholder={placeholderText}  
                                     value={newItemName}  
@@ -336,7 +324,7 @@
                                         {durations.map(d => (
                                             <div key={d.id} className="flex items-center gap-2 bg-white p-2 border rounded">
                                                 <span className="text-xs font-bold text-slate-600 whitespace-nowrap w-16">{d.name}:</span>
-                                                <input 
+                                                <input  
                                                     type="number"  
                                                     placeholder="Price"
                                                     className="w-full text-sm outline-none"
@@ -396,7 +384,7 @@
                                         <div className="flex justify-between items-center w-full">
                                             {editingId === item.id ? (
                                                 // Edit Mode Header
-                                                <input 
+                                                <input  
                                                     value={editName}
                                                     onChange={e => setEditName(e.target.value)}
                                                     className="flex-1 p-2 border rounded text-sm bg-white focus:ring-2 focus:ring-logo-green-500 mr-2"
@@ -470,8 +458,8 @@
                                                             type="number"  
                                                             min="0"
                                                             max="100"
-                                                            step="0.1"
-                                                            className="w-full p-1 border rounded text-xs"
+                            <input type="number" step="0.1"
+                            className="w-full p-1 border rounded text-xs"
                                                             placeholder="0"
                                                             value={editCommission}
                                                             onChange={e => setEditCommission(e.target.value)}
@@ -491,7 +479,7 @@
                             )}
                         </div>
                     </div>
-                     {modal.isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60"><div className="bg-white rounded-xl p-6 max-w-sm"><h3 className="font-bold mb-2">{modal.title}</h3><p className="mb-4 text-sm">{modal.message}</p><div className="flex gap-2 justify-end">{modal.type==='confirm'&&<button onClick={closeModal} className="px-4 py-2 text-slate-500">Cancel</button>}<button onClick={modal.onConfirm||closeModal} className={`px-4 py-2 rounded text-white ${modal.confirmColor==='red'?'bg-red-500':'bg-logo-green-600'}`}>Okay</button></div></div></div>}
+                    {modal.isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60"><div className="bg-white rounded-xl p-6 max-w-sm"><h3 className="font-bold mb-2">{modal.title}</h3><p className="mb-4 text-sm">{modal.message}</p><div className="flex gap-2 justify-end">{modal.type==='confirm'&&<button onClick={closeModal} className="px-4 py-2 text-slate-500">Cancel</button>}<button onClick={modal.onConfirm||closeModal} className={`px-4 py-2 rounded text-white ${modal.confirmColor==='red'?'bg-red-500':'bg-logo-green-600'}`}>Okay</button></div></div></div>}
                 </div>
             );
         };
@@ -659,7 +647,7 @@
             }, [user, view]);
 
 
-            // --- 1. INITIALIZE FIREBASE & AUTH ---
+            // --- 1. INITIALIZE FIREBASE & AUTH (Reverted) ---
             useEffect(() => {
                 // Load offline queue from local storage
                 const savedQueue = localStorage.getItem('spa_offline_queue');
@@ -683,32 +671,26 @@
                 }
 
                 const initFirebase = async () => {
-                    if (!firebaseConfig || !firebaseConfig.projectId || firebaseConfig.projectId === 'parsing-error') {
-                         setConfigError("Firebase configuration is missing or invalid. Check Console.");
-                         return;
+                    if (!firebaseConfig || !firebaseConfig.projectId) {
+                        setConfigError("Firebase configuration is missing.");
+                        return;
                     }
                     
                     try {
                         if (!firebase.apps.length) {
-                            const app = firebase.initializeApp(firebaseConfig);
-                            firebase.firestore().setLogLevel('debug'); // Set Firestore logging
+                            firebase.initializeApp(firebaseConfig);
                         }
                         
                         const auth = firebase.auth();
                         const db = firebase.firestore();
 
-                        // MANDATORY AUTH FLOW: Use custom token if available, otherwise sign in anonymously
-                        if (initialAuthToken) {
-                            await auth.signInWithCustomToken(initialAuthToken);
-                        } else {
-                            await auth.signInAnonymously();
-                        }
+                        // Reverted to original anonymous sign-in logic
+                        await auth.signInAnonymously();
 
                         auth.onAuthStateChanged((u) => {
                             if (u) {
                                 setFbUser(u);
                                 setFb({ db, auth, appId: currentAppId });
-                                console.log("Firebase initialized and authenticated.");
                             }
                         });
                     } catch (error) {  
@@ -717,11 +699,9 @@
                         let msg = error.message || "Unknown connection error";
                         
                         if (error.code === 'auth/operation-not-allowed') {
-                            msg = "Anonymous Authentication is DISABLED. Please go to Firebase Console -> Authentication -> Sign-in method -> Enable Anonymous.";
+                            msg = "Anonymous Authentication is DISABLED. Please enable it in Firebase Console.";
                         } else if (error.code === 'auth/unauthorized-domain') {
-                            msg = "Domain not authorized. Go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add your domain.";
-                        } else if (error.code === 'auth/invalid-custom-token' || error.code === 'auth/custom-token-mismatch') {
-                             msg = "Authentication token failed. Ensure app ID is correct and service account is running.";
+                            msg = "Domain not authorized. Please add your domain to Firebase settings.";
                         }
 
                         setConfigError(msg);  
@@ -772,7 +752,7 @@
 
                         } catch (error) {
                             console.error("Sync failed", error);
-                            // Keep remaining items in queue if partial fail? 
+                            // Keep remaining items in queue if partial fail?  
                             // For simplicity, we keep all if one fails to prevent data loss, or just retry next time.
                         } finally {
                             setIsGlobalLoading(false);
@@ -783,11 +763,23 @@
                 syncOfflineQueue();
             }, [isOnline, fb, offlineQueue.length]);
 
+            // --- NEW HELPER: Creates a Firestore Query based on branch filter ---
+            const getFilteredQuery = (collectionName) => {
+                if (!fb || !user) return; // Should not happen if called within sync useEffects
+                const basePath = `artifacts/${fb.appId}/public/data`;
+                let query = fb.db.collection(`${basePath}/${collectionName}`);
+                
+                // Only apply branch filter if user is NOT the Owner Admin ('ALL' view)
+                if (user.currentBranch && user.currentBranch !== 'ALL') {
+                    query = query.where('branch', '==', user.currentBranch);
+                }
+                return query;
+            };
 
             // --- 2. DATA SYNC (Listener Management) ---
             
             useEffect(() => {
-                if (!fb || !fbUser) return;
+                if (!fb || !fbUser || !user) return; // Need both firebase instance and logged-in user context
                 const { db, appId } = fb;
                 const basePath = `artifacts/${appId}/public/data`;
                 
@@ -795,23 +787,25 @@
                 
                 let unsubTrans = () => {};
                 if (isTransactionListenerActive && view === 'dashboard') {
-                    // Transactions (Active Listener ONLY when active and on dashboard)
-                    unsubTrans = getCollection('transactions')
-                        .onSnapshot((snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
-                            setTransactions(data);
-                            setDbReady(true);
-                        }, (error) => console.error("Sync Error: Transactions", error));
+                    // Transactions: Use filtered query (filters by branch unless user is viewing 'ALL')
+                    const transactionQuery = getFilteredQuery('transactions');
+                    if (transactionQuery) {
+                        unsubTrans = transactionQuery
+                            .onSnapshot((snapshot) => {
+                                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                                data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
+                                setTransactions(data);
+                                setDbReady(true);
+                            }, (error) => console.error("Sync Error: Transactions", error));
+                    }
                 } else if (view !== 'dashboard' && isTransactionListenerActive) {
                     // Turn off listener if leaving dashboard view, even if active
                     setIsTransactionListenerActive(false);
                 } else if (!isTransactionListenerActive && view === 'dashboard') {
-                    // If listener is paused due to inactivity, transactions state will be stale.
-                    // We keep the old data for display and wait for reconnection.
+                    // If listener is paused due to inactivity, keep old data.
                 }
 
-                // Users (Always Load - Needed for Login/Team Management)
+                // Users (Always Load All - Global Management List)
                 const unsubUsers = getCollection('users')
                     .onSnapshot(async (snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -844,7 +838,9 @@
 
                     }, (error) => console.error("Sync Error: Users", error));
 
-                // Master Lists (Always Load)
+                // Master Lists (Always Load All - Small, Global Configuration)
+                // We keep fetching all for master lists as they are usually small and cross-branch
+                // and filtering them would unnecessarily complicate the 'lists' view.
                 const unsubTherapists = getCollection('therapists')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -876,20 +872,20 @@
                     unsubServices();
                     unsubDurations();
                 };
-            }, [fb, fbUser, isTransactionListenerActive, view]); // DEPENDENCY: isTransactionListenerActive now controls transaction sync
-
+            }, [fb, fbUser, user, isTransactionListenerActive, view]); // Added 'user' to dependencies
 
             // --- 2b. LAZY LOAD HISTORY (Only when View is 'history') ---
             useEffect(() => {
-                if (!fb || !fbUser || view !== 'history') {
+                if (!fb || !fbUser || !user || view !== 'history') {
                     if (history.length > 0) setHistory([]); // Free up memory
                     return;
                 }
                 
-                const { db, appId } = fb;
-                const basePath = `artifacts/${appId}/public/data`;
-                
-                const unsub = db.collection(`${basePath}/history`)
+                // History: Use filtered query (filters by branch unless user is viewing 'ALL')
+                const historyQuery = getFilteredQuery('history');
+                if (!historyQuery) return; // Should not happen based on outer conditions
+
+                const unsub = historyQuery
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         data.sort((a, b) => getMillis(b.timestamp_val) - getMillis(a.timestamp_val));
@@ -899,7 +895,8 @@
                     });
 
                 return () => unsub();
-            }, [fb, fbUser, view]);  
+            }, [fb, fbUser, user, view]); // Added 'user' to dependencies
+            // --- END Data Fetching Refactor ---
 
             // --- 2c. REAL-TIME USER ROLE SYNC ---
             useEffect(() => {
@@ -993,12 +990,11 @@
             // Filter Transactions by Branch AND My Shift Toggle
             const getFilteredData = () => {
                 if (!user) return [];
-                let data = transactions;
+                // The `transactions` state is already filtered by branch in the useEffect,
+                // so we only need to apply the `showMyShift` filter here.
+                let data = transactions; 
 
-                // 1. Filter by Branch (if not ALL)
-                if (user.currentBranch !== 'ALL') {
-                    data = data.filter(t => t.branch === user.currentBranch);
-                }
+                // 1. (Branch filter already applied during fetch in useEffect 2)
 
                 // 2. Filter by User (if My Shift is toggled AND user is staff)
                 if (showMyShift && user.role !== 'admin') {  
@@ -1038,10 +1034,18 @@
             // NEW: Branch-wise Financial Summary (Only calculated/shown for Owner Admin)
             const branchFinancials = useMemo(() => {
                 // Only run if the user is the Owner Admin viewing ALL branches
-                if (user?.currentBranch !== 'ALL' || user.role !== 'admin') return null;  
+                // NOTE: Since the main `transactions` state is no longer guaranteed to contain ALL data 
+                // when a user is logged into a specific branch, this ALL branch calculation should 
+                // ideally only run when `user.currentBranch === 'ALL'` and should look at all 
+                // transactions fetched by the global listener (if applicable), OR we rely on the history view.
+                
+                // Since the transaction listener is filtered, we cannot reliably compute this when logged 
+                // into a single branch. For now, we only compute when the user is explicitly set to 'ALL'.
+
+                if (user?.currentBranch !== 'ALL' || user.role !== 'admin' || transactions.length === 0) return null;  
 
                 const grouped = {};
-                // Include all defined branches plus any unknown ones that might exist
+                const allTransactionData = transactions; // Use the transactions state which should contain all data IF currentBranch is 'ALL'
                 const branchesToAnalyze = [...BRANCHES, 'Unknown'];
 
                 branchesToAnalyze.forEach(branch => {
@@ -1053,7 +1057,7 @@
                     };
                 });
 
-                transactions.forEach(t => {
+                allTransactionData.forEach(t => {
                     const branch = t.branch || 'Unknown';
                     const amount = Number(t.amount);
                     
@@ -1095,6 +1099,8 @@
                 const commissionableTransactions = filteredTransactions.filter(t => t.type !== 'expense' && t.status === 'completed');
 
                 commissionableTransactions.forEach(t => {
+                    // Use the branch recorded on the transaction, which is now guaranteed to be 
+                    // the one the user is viewing (or any if 'ALL').
                     const branch = t.branch || (user.currentBranch !== 'ALL' ? user.currentBranch : 'Unknown');
                     const name = t.therapist ? t.therapist.trim() : 'Unassigned';
                     
@@ -1967,12 +1973,12 @@
                                         <p className="text-sm text-slate-400 italic text-center py-2">No completed activity yet.</p>
                                     ) : (
                                         Object.keys(therapistStats).sort((a, b) => {
-                                             const idxA = BRANCHES.indexOf(a);
-                                             const idxB = BRANCHES.indexOf(b);
-                                             if (idxA === -1 && idxB === -1) return a.localeCompare(b);
-                                             if (idxA === -1) return 1;
-                                             if (idxB === -1) return -1;
-                                             return idxA - idxB;
+                                            const idxA = BRANCHES.indexOf(a);
+                                            const idxB = BRANCHES.indexOf(b);
+                                            if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                                            if (idxA === -1) return 1;
+                                            if (idxB === -1) return -1;
+                                            return idxA - idxB;
                                             }).map(branch => (
                                                 <div key={branch} className="mb-4 last:mb-0">
                                                     {(user.currentBranch === 'ALL' || Object.keys(therapistStats).length > 1) && (
