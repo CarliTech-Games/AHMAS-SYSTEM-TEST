@@ -26,13 +26,13 @@
                 extend: {
                     colors: {
                         'logo-green': {
-                            50: '#E6FFE6',       // Very light background
-                            100: '#CCFFCC',       // Light background
-                            500: '#00B300',       // Medium
-                            600: '#009900',       // Primary Button Hover
-                            700: '#008000',       // Base Logo Green / Primary
-                            800: '#006600',       // Darker text/header
-                            900: '#004C00',       // Deepest text
+                            50: '#E6FFE6',        // Very light background
+                            100: '#CCFFCC',        // Light background
+                            500: '#00B300',        // Medium
+                            600: '#009900',        // Primary Button Hover
+                            700: '#008000',        // Base Logo Green / Primary
+                            800: '#006600',        // Darker text/header
+                            900: '#004C00',        // Deepest text
                         },
                         'teal': {
                             600: '#008080', // Keep some teal accent for contrast
@@ -71,28 +71,42 @@
 
         // --- CONSTANTS ---
         const BRANCHES = [
-            'Guadalupe', 
-            'Mabolo', 
-            'Talisay', 
-            'Bacayan', 
-            'Lapu-lapu', 
+            'Guadalupe',  
+            'Mabolo',  
+            'Talisay',  
+            'Bacayan',  
+            'Lapu-lapu',  
             'AS Fortuna'
         ];
         
-        // --- FIREBASE CONFIGURATION (Reverted to Hardcoded) ---
-        const MANUAL_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAKXcZwKtFBRFvGbOKd0UnQrLuOLt7wV9M",
-            authDomain: "ahmas-tracker.firebaseapp.com",
-            projectId: "ahmas-tracker",
-            storageBucket: "ahmas-tracker.firebasestorage.app",
-            messagingSenderId: "6650730194",
-            appId: "1:6650730194:web:eedf9c5bcb25cfe12ebf0b",
-            measurementId: "G-XW2GZJXN08"
-        };
-        
-        const firebaseConfig = MANUAL_FIREBASE_CONFIG;
-        // The current app ID must match the projectId for Firestore paths to work correctly.
-        const currentAppId = firebaseConfig.projectId;
+        // --- FIREBASE CONFIGURATION (Using Canvas Globals) ---
+        let firebaseConfig = null;
+        let currentAppId = 'default-app-id';
+        let initialAuthToken = '';
+
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                firebaseConfig = JSON.parse(__firebase_config);
+            } else {
+                console.warn("Global __firebase_config not found. Using fallback config.");
+                // Minimal Fallback for development if globals aren't present
+                firebaseConfig = { projectId: 'ahmas-tracker-fallback' }; 
+            }
+        } catch (e) {
+            console.error("Error parsing __firebase_config:", e);
+            firebaseConfig = { projectId: 'parsing-error' };
+        }
+
+        if (typeof __app_id !== 'undefined') {
+            currentAppId = __app_id;
+        } else {
+            currentAppId = firebaseConfig.projectId; // Fallback to projectId
+        }
+
+        if (typeof __initial_auth_token !== 'undefined') {
+            initialAuthToken = __initial_auth_token;
+        }
+        // --- END FIREBASE CONFIGURATION ---
 
 
         // --- ICON COMPONENT ---
@@ -150,7 +164,7 @@
             ClipboardList: (p) => <Icon name="clipboard-list" {...p} />,
             MinusCircle: (p) => <Icon name="minus-circle" {...p} />,
             Wallet: (p) => <Icon name="wallet" {...p} />,
-            TrendingUp: (p) => <Icon name="trending-up" {...p} /> 
+            TrendingUp: (p) => <Icon name="trending-up" {...p} />  
         };
 
         // --- SECURITY HELPER: Hashing Function ---
@@ -174,8 +188,8 @@
         const getMillis = (ts) => {
             if (!ts) return Date.now(); // Treat pending/null as "now" so it appears at the top
             if (typeof ts === 'number') return ts; // Legacy or client-side number
-            if (typeof ts.toMillis === 'function') return ts.toMillis(); // Firestore Timestamp object
-            if (ts.seconds) return ts.seconds * 1000; // Raw object fallback
+            if (typeof ts.toMillis === 'function') return ts.toMillis(); // Firestore Timestamp object (V9+)
+            if (ts.seconds) return ts.seconds * 1000; // Raw object fallback (V8/Compat)
             return 0;
         };
 
@@ -192,18 +206,18 @@
 
         // --- List Management Component (Admin Only) ---
         const ListManagement = ({ therapists, services, durations, onAdd, onDelete, onEdit }) => {
-            const [activeTab, setActiveTab] = useState('therapist'); 
+            const [activeTab, setActiveTab] = useState('therapist');  
             
             // Add State
             const [newItemName, setNewItemName] = useState('');
-            const [newItemPrices, setNewItemPrices] = useState({}); 
-            const [newItemCommission, setNewItemCommission] = useState(''); 
+            const [newItemPrices, setNewItemPrices] = useState({});  
+            const [newItemCommission, setNewItemCommission] = useState('');  
             
             // Edit State
             const [editingId, setEditingId] = useState(null);
             const [editName, setEditName] = useState('');
             const [editPrices, setEditPrices] = useState({});
-            const [editCommission, setEditCommission] = useState(''); 
+            const [editCommission, setEditCommission] = useState('');  
 
             const [modal, setModal] = useState({ isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red' });
             const closeModal = () => setModal({ ...modal, isOpen: false });
@@ -223,14 +237,14 @@
                 onAdd(activeTab, newItemName, extraData);
                 setNewItemName('');
                 setNewItemPrices({});
-                setNewItemCommission(''); 
+                setNewItemCommission('');  
             };
             
             const startEdit = (item) => {
                 setEditingId(item.id);
                 setEditName(item.name);
                 setEditPrices(item.prices || {});
-                setEditCommission(item.commissionRate !== undefined ? String(item.commissionRate) : ''); 
+                setEditCommission(item.commissionRate !== undefined ? String(item.commissionRate) : '');  
             };
 
             const cancelEdit = () => {
@@ -244,7 +258,7 @@
                 const updatedData = { name: editName.trim() };
                 if (activeTab === 'service') {
                     updatedData.prices = editPrices;
-                } else if (activeTab === 'therapist') { 
+                } else if (activeTab === 'therapist') {  
                     updatedData.commissionRate = parseFloat(editCommission) || 0;
                 }
                 onEdit(activeTab, editingId, updatedData);
@@ -305,10 +319,10 @@
                         <form onSubmit={handleFormSubmit} className="flex flex-col gap-3">
                             <div className="flex gap-2">
                                 <input 
-                                    required 
-                                    placeholder={placeholderText} 
-                                    value={newItemName} 
-                                    onChange={e => setNewItemName(e.target.value)} 
+                                    required  
+                                    placeholder={placeholderText}  
+                                    value={newItemName}  
+                                    onChange={e => setNewItemName(e.target.value)}  
                                     className="flex-1 p-3 border rounded-lg bg-slate-50 focus:ring-2 focus:ring-logo-green-500 outline-none"
                                 />
                             </div>
@@ -323,7 +337,7 @@
                                             <div key={d.id} className="flex items-center gap-2 bg-white p-2 border rounded">
                                                 <span className="text-xs font-bold text-slate-600 whitespace-nowrap w-16">{d.name}:</span>
                                                 <input 
-                                                    type="number" 
+                                                    type="number"  
                                                     placeholder="Price"
                                                     className="w-full text-sm outline-none"
                                                     value={newItemPrices[d.name] || ''}
@@ -335,8 +349,8 @@
                                 </div>
                             )}
 
-                             {/* Commission Rate Input for Therapists */}
-                             {activeTab === 'therapist' && (
+                            {/* Commission Rate Input for Therapists */}
+                            {activeTab === 'therapist' && (
                                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                                     <label className="text-xs font-bold text-slate-500 mb-2 uppercase block">Commission Rate (%)</label>
                                     <input
@@ -352,8 +366,8 @@
                                 </div>
                             )}
 
-                            <button 
-                                type="submit" 
+                            <button  
+                                type="submit"  
                                 disabled={isServiceAddDisabled} // Disable if no durations for service
                                 className={`w-full text-white p-3 rounded-lg font-bold transition shadow-sm ${
                                     isServiceAddDisabled
@@ -420,8 +434,8 @@
                                                         {durations.map(d => (
                                                             <div key={d.id} className="flex items-center gap-2">
                                                                 <span className="font-bold w-14">{d.name}:</span>
-                                                                <input 
-                                                                    type="number" 
+                                                                <input  
+                                                                    type="number"  
                                                                     className="w-full p-1 border rounded text-xs"
                                                                     placeholder="0"
                                                                     value={editPrices[d.name] || ''}
@@ -452,8 +466,8 @@
                                                 {editingId === item.id ? (
                                                     <div className="mt-2 bg-slate-100 p-2 rounded flex items-center gap-2">
                                                         <span className="font-bold w-20">Rate (%):</span>
-                                                        <input 
-                                                            type="number" 
+                                                        <input  
+                                                            type="number"  
                                                             min="0"
                                                             max="100"
                                                             step="0.1"
@@ -520,15 +534,15 @@
                             </label>
 
                             <div className="flex justify-end gap-2 pt-2">
-                                <button 
+                                <button  
                                     type="button"
-                                    onClick={() => setEditUserModal({ isOpen: false, user: null, newPin: '' })} 
+                                    onClick={() => setEditUserModal({ isOpen: false, user: null, newPin: '' })}  
                                     className="px-4 py-2 text-slate-500 rounded hover:bg-slate-100"
                                 >
                                     Cancel
                                 </button>
-                                <button 
-                                    type="submit" 
+                                <button  
+                                    type="submit"  
                                     className="px-4 py-2 rounded text-white bg-logo-green-600 hover:bg-logo-green-700 font-bold"
                                 >
                                     Reset PIN
@@ -547,7 +561,7 @@
             const [fbUser, setFbUser] = useState(null);
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             const [dbReady, setDbReady] = useState(false);
-            const [configError, setConfigError] = useState(null); 
+            const [configError, setConfigError] = useState(null);  
             const [isGlobalLoading, setIsGlobalLoading] = useState(false); // NEW: Global Loading State
 
             const [user, setUser] = useState(null);
@@ -579,7 +593,7 @@
             // Forms
             const [loginUsername, setLoginUsername] = useState('');
             const [loginPin, setLoginPin] = useState('');
-            const [loginBranch, setLoginBranch] = useState(''); 
+            const [loginBranch, setLoginBranch] = useState('');  
             
             // Initial role is 'staff'
             const [newUser, setNewUser] = useState({ name: '', username: '', pin: '', role: 'staff' });
@@ -587,11 +601,11 @@
             
             // Added expense-related fields and viewType
             const [formData, setFormData] = useState({
-                clientName: '', 
-                service: '', 
-                therapist: '', 
-                amount: '', 
-                duration: '', 
+                clientName: '',  
+                service: '',  
+                therapist: '',  
+                amount: '',  
+                duration: '',  
                 type: 'booking', // booking, sale, expense
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
@@ -645,7 +659,7 @@
             }, [user, view]);
 
 
-            // --- 1. INITIALIZE FIREBASE ---
+            // --- 1. INITIALIZE FIREBASE & AUTH ---
             useEffect(() => {
                 // Load offline queue from local storage
                 const savedQueue = localStorage.getItem('spa_offline_queue');
@@ -669,30 +683,36 @@
                 }
 
                 const initFirebase = async () => {
-                    if (!firebaseConfig || !firebaseConfig.projectId) {
-                         setConfigError("Firebase configuration is missing. Please ensure MANUAL_FIREBASE_CONFIG is complete.");
+                    if (!firebaseConfig || !firebaseConfig.projectId || firebaseConfig.projectId === 'parsing-error') {
+                         setConfigError("Firebase configuration is missing or invalid. Check Console.");
                          return;
                     }
                     
                     try {
                         if (!firebase.apps.length) {
-                            firebase.initializeApp(firebaseConfig);
+                            const app = firebase.initializeApp(firebaseConfig);
+                            firebase.firestore().setLogLevel('debug'); // Set Firestore logging
                         }
                         
                         const auth = firebase.auth();
                         const db = firebase.firestore();
 
-                        // Using anonymous sign-in, as required when removing __initial_auth_token
-                        await auth.signInAnonymously();
+                        // MANDATORY AUTH FLOW: Use custom token if available, otherwise sign in anonymously
+                        if (initialAuthToken) {
+                            await auth.signInWithCustomToken(initialAuthToken);
+                        } else {
+                            await auth.signInAnonymously();
+                        }
 
                         auth.onAuthStateChanged((u) => {
                             if (u) {
                                 setFbUser(u);
                                 setFb({ db, auth, appId: currentAppId });
+                                console.log("Firebase initialized and authenticated.");
                             }
                         });
-                    } catch (error) { 
-                        console.error("FB Init Error:", error); 
+                    } catch (error) {  
+                        console.error("FB Init Error:", error);  
                         
                         let msg = error.message || "Unknown connection error";
                         
@@ -700,9 +720,11 @@
                             msg = "Anonymous Authentication is DISABLED. Please go to Firebase Console -> Authentication -> Sign-in method -> Enable Anonymous.";
                         } else if (error.code === 'auth/unauthorized-domain') {
                             msg = "Domain not authorized. Go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add your domain.";
+                        } else if (error.code === 'auth/invalid-custom-token' || error.code === 'auth/custom-token-mismatch') {
+                             msg = "Authentication token failed. Ensure app ID is correct and service account is running.";
                         }
 
-                        setConfigError(msg); 
+                        setConfigError(msg);  
                     }
                 };
 
@@ -735,7 +757,7 @@
                                 // IMPORTANT: Restore serverTimestamp behavior
                                 const itemPayload = {
                                     ...item,
-                                    timestamp: firebase.firestore.FieldValue.serverTimestamp() 
+                                    timestamp: firebase.firestore.FieldValue.serverTimestamp()  
                                 };
                                 // Remove local id used for keying
                                 delete itemPayload.localId;
@@ -797,20 +819,21 @@
                         
                         if (data.length === 0) {
                             seedDefaultUsers(db, basePath);
-                            return; 
+                            return;  
                         }
 
                         // Check hash updates (One-time migration for default users for safety)
                         const needsUpdate = data.filter(u => (u.username === 'admin' && u.pin.length < 20) || (u.username === 'morning' && u.pin.length < 20) || (u.username === 'night' && u.pin.length < 20));
                         let shouldWait = false;
                         for (const u of needsUpdate) {
+                            // Check if pins are the cleartext defaults for migration
                             if (u.pin === '8888' || u.pin === '888888') { // Owner/Admin
                                 const hashedPin = await hashPin('888888'); // Use the 6-digit default pin for hashing
-                                await userColl.doc(u.id).update({ pin: hashedPin, role: 'admin' }); 
+                                await userColl.doc(u.id).update({ pin: hashedPin, role: 'admin' });  
                                 shouldWait = true;
                             } else if (u.pin === '1111' || u.pin === '2222') { // Staff
-                                const hashedPin = await hashPin(u.pin);
-                                await userColl.doc(u.id).update({ pin: hashedPin, role: 'staff' }); 
+                                const hashedPin = await hashPin(u.pin.length === 4 ? u.pin : '1111'); // Re-hash 4-digit pins
+                                await userColl.doc(u.id).update({ pin: hashedPin, role: 'staff' });  
                                 shouldWait = true;
                             }
                         }
@@ -846,10 +869,10 @@
                     }, (error) => console.error("Sync Error: Durations", error));
 
 
-                return () => { 
-                    unsubTrans(); 
-                    unsubUsers(); 
-                    unsubTherapists(); 
+                return () => {  
+                    unsubTrans();  
+                    unsubUsers();  
+                    unsubTherapists();  
                     unsubServices();
                     unsubDurations();
                 };
@@ -876,7 +899,7 @@
                     });
 
                 return () => unsub();
-            }, [fb, fbUser, view]); 
+            }, [fb, fbUser, view]);  
 
             // --- 2c. REAL-TIME USER ROLE SYNC ---
             useEffect(() => {
@@ -925,14 +948,14 @@
             const seedDefaultUsers = async (db, basePath) => {
                 const defaults = [
                     // MODIFIED: Admin PIN set to 6 digits
-                    { name: 'Owner Admin', username: 'admin', pin: '888888', role: 'admin' }, 
-                    { name: 'Morning Rec.', username: 'morning', pin: '1111', role: 'staff' }, 
-                    { name: 'Night Rec.', username: 'night', pin: '2222', role: 'staff' } 
+                    { name: 'Owner Admin', username: 'admin', pin: '888888', role: 'admin' },  
+                    { name: 'Morning Rec.', username: 'morning', pin: '1111', role: 'staff' },  
+                    { name: 'Night Rec.', username: 'night', pin: '2222', role: 'staff' }  
                 ];
                 const userColl = db.collection(`${basePath}/users`);
                 const usersToSeed = await Promise.all(defaults.map(async u => {
                     const hashedPin = await hashPin(u.pin);
-                    return { ...u, pin: hashedPin }; 
+                    return { ...u, pin: hashedPin };  
                 }));
                 for (const u of usersToSeed) await userColl.add(u);
             };
@@ -940,7 +963,7 @@
             useEffect(() => {
                 if (view === 'profile' && user) {
                     const freshUser = users.find(u => u.id === user.id) || user;
-                    setProfileData({ username: freshUser.username, pin: '' }); 
+                    setProfileData({ username: freshUser.username, pin: '' });  
                 }
             }, [view, user, users]);
 
@@ -978,7 +1001,7 @@
                 }
 
                 // 2. Filter by User (if My Shift is toggled AND user is staff)
-                if (showMyShift && user.role !== 'admin') { 
+                if (showMyShift && user.role !== 'admin') {  
                     data = data.filter(t => t.recordedBy === user.name);
                 }
                 
@@ -1002,10 +1025,10 @@
                 // Calculate Net Cash
                 const netCash = completedRevenue - totalExpenses;
 
-                return { 
+                return {  
                     totalRevenue: completedRevenue, // Total actual revenue collected (completed sales)
-                    pendingValue, 
-                    totalBookings, 
+                    pendingValue,  
+                    totalBookings,  
                     completedSales,
                     totalExpenses, // Total money paid out
                     netCash // Cash in hand (Completed Sales - Expenses)
@@ -1015,7 +1038,7 @@
             // NEW: Branch-wise Financial Summary (Only calculated/shown for Owner Admin)
             const branchFinancials = useMemo(() => {
                 // Only run if the user is the Owner Admin viewing ALL branches
-                if (user?.currentBranch !== 'ALL' || user.role !== 'admin') return null; 
+                if (user?.currentBranch !== 'ALL' || user.role !== 'admin') return null;  
 
                 const grouped = {};
                 // Include all defined branches plus any unknown ones that might exist
@@ -1110,7 +1133,7 @@
 
                 if (historyEndDate) {
                     const endTimestamp = new Date(historyEndDate);
-                    endTimestamp.setDate(endTimestamp.getDate() + 1); 
+                    endTimestamp.setDate(endTimestamp.getDate() + 1);  
                     const endTimestampVal = endTimestamp.getTime();
                     data = data.filter(h => getMillis(h.timestamp_val) < endTimestampVal);
                 }
@@ -1121,7 +1144,7 @@
 
             const downloadCSV = (record) => {
                 // --- MODIFICATION: ADD COMMISSION HEADER AND CALCULATION ---
-                const headers = ['Date', 'Branch', 'Time', 'Client Name / Description', 'Service / Category', 'Duration', 'Therapist', 'Amount (Income/Expense)', 'Commission Amount', 'Status', 'Recorded By', 'Notes']; 
+                const headers = ['Date', 'Branch', 'Time', 'Client Name / Description', 'Service / Category', 'Duration', 'Therapist', 'Amount (Income/Expense)', 'Commission Amount', 'Status', 'Recorded By', 'Notes'];  
                 
                 // Helper to safely get commission from archived therapist stats
                 const getCommissionForTransaction = (t, therapistStatsArchive) => {
@@ -1145,16 +1168,16 @@
                     const commissionAmount = getCommissionForTransaction(t, record.therapist_stats || {});
 
                     return [
-                        `"${record.date}"`, 
-                        `"${t.branch || 'N/A'}"`, 
-                        `"${t.time}"`, 
+                        `"${record.date}"`,  
+                        `"${t.branch || 'N/A'}"`,  
+                        `"${t.time}"`,  
                         `"${t.clientName || t.description || ''}"`, // Use clientName or description
                         `"${t.service || t.category || ''}"`, // Use service or category
-                        `"${t.duration || ''}"`, 
-                        `"${t.therapist || ''}"`, 
+                        `"${t.duration || ''}"`,  
+                        `"${t.therapist || ''}"`,  
                         t.amount, // Will be negative for expenses
-                        commissionAmount, // NEW: Commission
-                        t.status, 
+                        commissionAmount.toFixed(2), // NEW: Commission
+                        t.status,  
                         `"${t.recordedBy || 'System'}"`,
                         `"${t.notes || ''}"`
                     ];
@@ -1189,7 +1212,7 @@
                 } else if (listType === 'service') {
                     collectionName = 'services';
                     checkList = servicesList;
-                    if (extraData) data.prices = extraData; 
+                    if (extraData) data.prices = extraData;  
                 } else if (listType === 'duration') {
                     collectionName = 'durations';
                     checkList = durationsList;
@@ -1239,7 +1262,7 @@
 
             const handleEditItem = async (listType, id, updatedData) => {
                 let collectionName = '';
-                let checkList = []; 
+                let checkList = [];  
                 if (listType === 'therapist') {
                     collectionName = 'therapists';
                     checkList = therapistsList;
@@ -1257,7 +1280,7 @@
                 // --- DUPLICATE CHECK LOGIC ---
                 if (updatedData.name) {
                     const newName = updatedData.name.trim().toLowerCase();
-                    const isDuplicate = checkList.some(item => 
+                    const isDuplicate = checkList.some(item =>  
                         item.name.toLowerCase() === newName && item.id !== id
                     );
                     
@@ -1284,9 +1307,9 @@
             
             // History Deletion Handler (Admin Only)
             const handleDeleteHistory = (id, date) => {
-                if (user?.role !== 'admin') return; 
+                if (user?.role !== 'admin') return;  
 
-                   setModal({
+                    setModal({
                     isOpen: true, type: 'confirm', title: `Delete Report?`, message: `Are you sure you want to permanently delete the archived report for ${date}? This action cannot be undone.`, confirmColor: 'red',
                     onConfirm: async () => {
                         closeModal();
@@ -1321,8 +1344,8 @@
                     const found = users.find(u => u.username.toLowerCase() === loginUsername.toLowerCase() && u.pin === hashedPinAttempt);
                     
                     if (found) {
-                        if (loginBranch === 'ALL' && found.role !== 'admin') { 
-                            setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only the Owner Admin can access the All Branches view.', onConfirm: closeModal, confirmColor: 'red' }); 
+                        if (loginBranch === 'ALL' && found.role !== 'admin') {  
+                            setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only the Owner Admin can access the All Branches view.', onConfirm: closeModal, confirmColor: 'red' });  
                             return;
                         }
                         
@@ -1330,9 +1353,9 @@
                         
                         // UPDATE FIRESTORE WITH LOGIN BRANCH
                         const basePath = `artifacts/${fb.appId}/public/data`;
-                        await fb.db.collection(`${basePath}/users`).doc(found.id).update({ 
+                        await fb.db.collection(`${basePath}/users`).doc(found.id).update({  
                             currentBranch: loginBranch,
-                            lastActive: firebase.firestore.FieldValue.serverTimestamp() 
+                            lastActive: firebase.firestore.FieldValue.serverTimestamp()  
                         });
 
                         setUser(loggedUser);
@@ -1342,7 +1365,7 @@
                         setModal({ isOpen: true, type: 'alert', title: 'Login Failed', message: 'Check credentials.', onConfirm: closeModal, confirmColor: 'red' });
                     }
                 } catch (err) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Login processing error.', onConfirm: closeModal, confirmColor: 'red' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Login processing error. Check connection.', onConfirm: closeModal, confirmColor: 'red' });
                 } finally {
                     setIsGlobalLoading(false);
                 }
@@ -1358,7 +1381,7 @@
                 // 1. Try to find exact duration price
                 if (durationName && foundService.prices && foundService.prices[durationName]) {
                     return foundService.prices[durationName];
-                } 
+                }  
                 
                 // 2. Fallback to base price (if any legacy price exists)
                 if (foundService.price) {
@@ -1372,10 +1395,10 @@
                 // Calculate price based on this NEW service + EXISTING duration
                 const newPrice = calculatePrice(serviceName, formData.duration);
                 
-                setFormData({ 
-                    ...formData, 
+                setFormData({  
+                    ...formData,  
                     service: serviceName,
-                    amount: newPrice 
+                    amount: newPrice  
                 });
             };
 
@@ -1383,10 +1406,10 @@
                 // Calculate price based on EXISTING service + NEW duration
                 const newPrice = calculatePrice(formData.service, durationName);
 
-                setFormData({ 
-                    ...formData, 
+                setFormData({  
+                    ...formData,  
                     duration: durationName,
-                    amount: newPrice 
+                    amount: newPrice  
                 });
             };
 
@@ -1403,8 +1426,8 @@
 
                 if (transactionType === 'expense') {
                     if (!formData.amount || !formData.category || !formData.notes) {
-                           setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please provide Amount, Category, and Description (Notes) for the expense.', onConfirm: closeModal, confirmColor: 'red' });
-                           return;
+                            setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please provide Amount, Category, and Description (Notes) for the expense.', onConfirm: closeModal, confirmColor: 'red' });
+                            return;
                     }
                 } else {
                     if (!formData.clientName || !formData.amount || !formData.service || !formData.therapist) {
@@ -1414,8 +1437,8 @@
 
                     // VALIDATION: Check for conflicts (Same Therapist at Exact Same Time)
                     const allBookings = [...transactions, ...offlineQueue];
-                    const isConflict = allBookings.some(t => 
-                        t.therapist === formData.therapist && 
+                    const isConflict = allBookings.some(t =>  
+                        t.therapist === formData.therapist &&  
                         t.time === formData.time &&
                         t.type !== 'expense' // Don't check expenses
                     );
@@ -1459,9 +1482,9 @@
                     setOfflineQueue(prev => [...prev, newOfflineItem]);
                     
                     const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
-                    setFormData({ 
-                        clientName: '', service: '', duration: '', therapist: '', amount: '', 
-                        type: 'booking', time: new Date().toTimeString().slice(0, 5), 
+                    setFormData({  
+                        clientName: '', service: '', duration: '', therapist: '', amount: '',  
+                        type: 'booking', time: new Date().toTimeString().slice(0, 5),  
                         targetBranch: resetTargetBranch, notes: '', category: ''
                     });
 
@@ -1480,8 +1503,8 @@
 
                     const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
                     
-                    setFormData({ 
-                        clientName: '', service: '', duration: '', therapist: '', amount: '', 
+                    setFormData({  
+                        clientName: '', service: '', duration: '', therapist: '', amount: '',  
                         type: 'booking', time: new Date().toTimeString().slice(0, 5),
                         targetBranch: resetTargetBranch, notes: '', category: ''
                     });
@@ -1513,8 +1536,8 @@
             };
 
             const requestDelete = (id) => {
-                if (user?.role !== 'admin') { 
-                    setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only Admin can delete.', onConfirm: closeModal, confirmColor: 'red' }); 
+                if (user?.role !== 'admin') {  
+                    setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only Admin can delete.', onConfirm: closeModal, confirmColor: 'red' });  
                     return;
                 }
                 setModal({
@@ -1536,8 +1559,8 @@
 
             const requestEndDay = () => {
                 // Check if user has permission (Admin OR Staff) AND is not in 'ALL BRANCHES' view
-                if (user?.currentBranch === 'ALL' || (user?.role !== 'admin' && user?.role !== 'staff')) { 
-                    setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only authorized Staff/Admin can close the shift/day on a specific branch view.', onConfirm: closeModal, confirmColor: 'red' }); 
+                if (user?.currentBranch === 'ALL' || (user?.role !== 'admin' && user?.role !== 'staff')) {  
+                    setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only authorized Staff/Admin can close the shift/day on a specific branch view.', onConfirm: closeModal, confirmColor: 'red' });  
                     return;
                 }
                 
@@ -1566,7 +1589,7 @@
                                 timestamp_val: firebase.firestore.FieldValue.serverTimestamp(),
                                 transactions: filteredTransactions,
                                 stats: stats,
-                                therapist_stats: therapistStats, 
+                                therapist_stats: therapistStats,  
                                 branch: user.currentBranch,
                                 closedBy: user.name
                             });
@@ -1577,7 +1600,7 @@
                             await Promise.all(deletePromises);
 
                             // 3. COMPLETE SUCCESS
-                            setView('dashboard'); 
+                            setView('dashboard');  
                             setModal({ isOpen: true, type: 'alert', title: 'Shift Closed!', message: `Shift transactions successfully archived for ${user.currentBranch}.`, confirmColor: 'logo-green', onConfirm: closeModal });
 
                         } catch (error) {
@@ -1590,7 +1613,7 @@
                             if (historySaveSuccess) {
                                 // If the history save succeeded but deletion failed:
                                 title = 'Cleanup Failed';
-                                message = 'The shift report was successfully saved to History, but clearing the dashboard failed. Live Records may contain duplicate entries that need manual deletion (Admin only).';
+                                message = 'The shift report was successfully saved to History, but clearing the dashboard failed. Live Records may contain entries that need manual deletion (Admin only).';
                             }
                             
                             setModal({ isOpen: true, type: 'alert', title: title, message: message, confirmColor: 'red', onConfirm: closeModal });
@@ -1620,22 +1643,22 @@
                     
                     // Policy check for new user creation
                     const requiredLen = newUser.role === 'admin' ? 6 : 4;
-                    if (newUser.pin.length !== requiredLen) { 
-                        setModal({ isOpen: true, type: 'alert', title: 'Policy Check', message: `${newUser.role.toUpperCase()} PINs must be exactly ${requiredLen} digits.`, onConfirm: closeModal, confirmColor: 'red' }); 
+                    if (newUser.pin.length !== requiredLen) {  
+                        setModal({ isOpen: true, type: 'alert', title: 'Policy Check', message: `${newUser.role.toUpperCase()} PINs must be exactly ${requiredLen} digits.`, onConfirm: closeModal, confirmColor: 'red' });  
                         return;
                     }
 
-                    if (users.some(u => u.username.toLowerCase() === trimmedUsername.toLowerCase())) { 
+                    if (users.some(u => u.username.toLowerCase() === trimmedUsername.toLowerCase())) {  
                         setModal({ isOpen: true, type: 'alert', title: 'Username Taken', message: 'This username is already in use.', onConfirm: closeModal, confirmColor: 'red' });
-                        return; 
+                        return;  
                     }
                     
                     const basePath = `artifacts/${fb.appId}/public/data`;
-                    const newUserPayload = { 
-                        ...newUser, 
+                    const newUserPayload = {  
+                        ...newUser,  
                         name: trimmedName,
                         username: trimmedUsername,
-                        pin: hashedPin 
+                        pin: hashedPin  
                     };
                     
                     // SMART ADD: Auto-tag with creator's branch
@@ -1645,7 +1668,7 @@
 
                     await fb.db.collection(`${basePath}/users`).add(newUserPayload);
                     // UPDATED: Reset role to 'staff'
-                    setNewUser({ name: '', username: '', pin: '', role: 'staff' }); 
+                    setNewUser({ name: '', username: '', pin: '', role: 'staff' });  
                 } catch(err) {
                     setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to add user.', confirmColor: 'red', onConfirm: closeModal });
                 } finally {
@@ -1654,16 +1677,16 @@
             };
 
             const handleDeleteUser = (id) => {
-                if (users.length <= 1) { 
+                if (users.length <= 1) {  
                     setModal({ isOpen: true, type: 'alert', title: 'Action Denied', message: 'Cannot delete the last remaining user.', onConfirm: closeModal, confirmColor: 'red' });
-                    return; 
+                    return;  
                 }
-                setModal({ isOpen: true, type: 'confirm', title: 'Remove Staff?', message: 'Revoke access for this user?', confirmColor: 'red', onConfirm: async () => { 
+                setModal({ isOpen: true, type: 'confirm', title: 'Remove Staff?', message: 'Revoke access for this user?', confirmColor: 'red', onConfirm: async () => {  
                     closeModal();
                     setIsGlobalLoading(true);
                     try {
                         const basePath = `artifacts/${fb.appId}/public/data`;
-                        await fb.db.collection(`${basePath}/users`).doc(id).delete(); 
+                        await fb.db.collection(`${basePath}/users`).doc(id).delete();  
                     } catch(err) {
                         setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to delete user.', confirmColor: 'red', onConfirm: closeModal });
                     } finally {
@@ -1675,14 +1698,14 @@
             // NEW: Owner Toggle Role Function
             const handleToggleRole = (targetUser) => {
                 // Toggle between admin and staff
-                const newRole = targetUser.role === 'admin' ? 'staff' : 'admin'; 
-                const action = newRole === 'admin' ? 'Promote to Admin' : 'Demote to Staff'; 
+                const newRole = targetUser.role === 'admin' ? 'staff' : 'admin';  
+                const action = newRole === 'admin' ? 'Promote to Admin' : 'Demote to Staff';  
                 
                 setModal({
                     isOpen: true,
                     type: 'confirm',
                     title: action,
-                    message: `Are you sure you want to change ${targetUser.name}'s role to ${newRole.toUpperCase()}?`,
+                    message: `Are you sure you want to change ${targetUser.name}'s role to ${newRole.toUpperCase()}? Note: This does not affect their PIN length policy until they reset it.`,
                     confirmColor: 'logo-green',
                     onConfirm: async () => {
                         closeModal();
@@ -1710,7 +1733,7 @@
                 try {
                     if (newPin && newPin.length > 0) {
                         // MODIFIED: Policy Check based on role for 4 or 6 digits
-                        const requiredLen = user.role === 'admin' ? 6 : 4; 
+                        const requiredLen = user.role === 'admin' ? 6 : 4;  
                         
                         if (newPin.length !== requiredLen) {
                              setModal({ isOpen: true, type: 'alert', title: 'Policy Check', message: `Your PIN must be exactly ${requiredLen} digits.`, onConfirm: closeModal, confirmColor: 'red' });
@@ -1725,9 +1748,9 @@
                         updateData.pin = hashedPin;
                     }
 
-                    if (users.some(u => u.username.toLowerCase() === newUsername.toLowerCase() && u.id !== user.id)) { 
+                    if (users.some(u => u.username.toLowerCase() === newUsername.toLowerCase() && u.id !== user.id)) {  
                         setModal({ isOpen: true, type: 'alert', title: 'Username Taken', message: 'This username is already in use by another staff.', onConfirm: closeModal, confirmColor: 'red' });
-                        return; 
+                        return;  
                     }
                     
                     const basePath = `artifacts/${fb.appId}/public/data`;
@@ -1753,7 +1776,7 @@
                 const requiredLen = targetUser.role === 'admin' ? 6 : 4;
 
                 if (newPin.length !== requiredLen) {
-                    setModal({ isOpen: true, type: 'alert', title: 'PIN Error', message: `${targetUser.role.toUpperCase()} PIN must be exactly ${requiredLen} digits.`, onConfirm: closeModal, confirmColor: 'red' }); 
+                    setModal({ isOpen: true, type: 'alert', title: 'PIN Error', message: `${targetUser.role.toUpperCase()} PIN must be exactly ${requiredLen} digits.`, onConfirm: closeModal, confirmColor: 'red' });  
                     return;
                 }
                 
@@ -1800,7 +1823,7 @@
                 </div>
             );
 
-            if (!dbReady) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><div className="loader mb-4"></div><p className="text-slate-400 text-sm">Connecting to Spa Cloud...</p></div>;
+            if (!dbReady && fb) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><div className="loader mb-4"></div><p className="text-slate-400 text-sm">Connecting to Spa Cloud...</p></div>;
 
             // LOGIN SCREEN
             if (!user) {
@@ -1872,7 +1895,7 @@
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
                             {/* REVERTED: Only show Lists/History/Team if role is 'admin' */}
-                            {user.role === 'admin' && ( 
+                            {user.role === 'admin' && (  
                                 <>
                                     <button onClick={()=>setView('lists')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='lists'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.ShieldCheck size={16}/> Lists</button>
                                     <button onClick={()=>setView('history')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='history'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.History size={16}/> History</button>
@@ -1893,7 +1916,7 @@
                             <div className="space-y-6 fade-in">
                                 
                                 {/* NEW: ALL BRANCH SUMMARY (Owner Admin only) */}
-                                {user.currentBranch === 'ALL' && user.role === 'admin' && branchFinancials && branchFinancials.length > 0 && ( 
+                                {user.currentBranch === 'ALL' && user.role === 'admin' && branchFinancials && branchFinancials.length > 0 && (  
                                     <div className="bg-white p-4 rounded-xl shadow-lg border border-teal-100 space-y-4">
                                         <h3 className="text-sm font-bold text-teal-700 uppercase tracking-wider flex items-center gap-2"><Icons.TrendingUp size={16}/> All Branch Summary</h3>
                                         <div className="grid grid-cols-2 gap-3 mb-4 border-b pb-3 border-slate-100">
@@ -1950,7 +1973,7 @@
                                              if (idxA === -1) return 1;
                                              if (idxB === -1) return -1;
                                              return idxA - idxB;
-                                           }).map(branch => (
+                                            }).map(branch => (
                                                 <div key={branch} className="mb-4 last:mb-0">
                                                     {(user.currentBranch === 'ALL' || Object.keys(therapistStats).length > 1) && (
                                                         <h4 className="text-[10px] font-bold text-logo-green-700 uppercase mb-2 bg-logo-green-50 px-2 py-1 rounded inline-block">
@@ -1966,7 +1989,7 @@
                                                                 </div>
                                                                 <div className="text-right flex flex-col">
                                                                     <span className="text-sm font-bold text-logo-green-700 flex items-center gap-1">
-                                                                        <Icons.TrendingUp size={12} className="text-teal-600"/> {formatCurrency(s.commission)} 
+                                                                        <Icons.TrendingUp size={12} className="text-teal-600"/> {formatCurrency(s.commission)}  
                                                                     </span>
                                                                     <span className="text-[9px] text-slate-400">({s.rate}% of {formatCurrency(s.amount)})</span>
                                                                 </div>
@@ -1985,8 +2008,8 @@
                                         </h2>
                                         <div className="flex items-center gap-2">
                                             {/* Show "My Shift" toggle for staff */}
-                                            {user.role === 'staff' && ( 
-                                                <button 
+                                            {user.role === 'staff' && (  
+                                                <button  
                                                     onClick={() => setShowMyShift(!showMyShift)}
                                                     className={`text-[10px] font-bold ${showMyShift ? 'bg-logo-green-700 text-white' : 'bg-logo-green-50 text-logo-green-700'} px-3 py-1.5 rounded-full border border-logo-green-200 flex gap-1 items-center transition-colors`}
                                                 >
@@ -2065,7 +2088,7 @@
                                                                 {t.status==='completed'?<Icons.CheckCircle2 size={16}/>:<Icons.DollarSign size={16}/>}
                                                             </button>
                                                         )}
-                                                        {user.role==='admin'&&<button onClick={()=>requestDelete(t.id)} className="p-1.5 text-slate-300 hover:text-red-500"><Icons.Trash2 size={16}/></button>} 
+                                                        {user.role==='admin'&&<button onClick={()=>requestDelete(t.id)} className="p-1.5 text-slate-300 hover:text-red-500"><Icons.Trash2 size={16}/></button>}  
                                                     </div>
                                                 </div>
                                             </div>
@@ -2084,10 +2107,10 @@
                                     {user.currentBranch === 'ALL' ? (
                                         <div className="relative">
                                             <Icons.MapPin size={18} className="absolute left-3 top-3.5 text-slate-400" />
-                                            <select 
-                                                required 
-                                                value={formData.targetBranch} 
-                                                onChange={(e)=>setFormData({...formData, targetBranch:e.target.value})} 
+                                            <select  
+                                                required  
+                                                value={formData.targetBranch}  
+                                                onChange={(e)=>setFormData({...formData, targetBranch:e.target.value})}  
                                                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-logo-green-700 bg-slate-50 focus:bg-white appearance-none text-slate-600 font-bold border-logo-green-400"
                                             >
                                                 <option value="" disabled>SELECT TARGET BRANCH*</option>
@@ -2126,21 +2149,21 @@
                                     </div>
                                     
                                     {/* Service Notes Textarea */}
-                                    <textarea 
-                                        placeholder="Service Notes (e.g., Hard pressure, No oil on back, Client prefers quiet)" 
+                                    <textarea  
+                                        placeholder="Service Notes (e.g., Hard pressure, No oil on back, Client prefers quiet)"  
                                         rows="3"
-                                        value={formData.notes} 
-                                        onChange={e=>setFormData({...formData, notes:e.target.value})} 
+                                        value={formData.notes}  
+                                        onChange={e=>setFormData({...formData, notes:e.target.value})}  
                                         className="w-full p-3 border rounded-xl bg-slate-50 resize-none"
                                     />
 
                                     <div className="grid grid-cols-2 gap-4">
                                         {/* Price is now editable and required, auto-filled by service selection */}
-                                        <input required 
-                                            type="number" step="0.01" 
-                                            placeholder="Price (P)*" 
-                                            value={formData.amount} 
-                                            onChange={e=>setFormData({...formData, amount:e.target.value})} 
+                                        <input required  
+                                            type="number" step="0.01"  
+                                            placeholder="Price (P)*"  
+                                            value={formData.amount}  
+                                            onChange={e=>setFormData({...formData, amount:e.target.value})}  
                                             className="w-full p-3 border rounded-xl bg-slate-50"
                                         />
                                         <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
@@ -2160,10 +2183,10 @@
                                     {user.currentBranch === 'ALL' ? (
                                         <div className="relative">
                                             <Icons.MapPin size={18} className="absolute left-3 top-3.5 text-slate-400" />
-                                            <select 
-                                                required 
-                                                value={formData.targetBranch} 
-                                                onChange={(e)=>setFormData({...formData, targetBranch:e.target.value})} 
+                                            <select  
+                                                required  
+                                                value={formData.targetBranch}  
+                                                onChange={(e)=>setFormData({...formData, targetBranch:e.target.value})}  
                                                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-700 bg-slate-50 focus:bg-white appearance-none text-slate-600 font-bold border-red-400"
                                             >
                                                 <option value="" disabled>SELECT BRANCH AFFECTED*</option>
@@ -2188,21 +2211,21 @@
                                         <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-[120px] p-3 border rounded-xl bg-slate-50"/>
                                     </div>
                                     
-                                    <input required 
-                                        type="number" step="0.01" 
+                                    <input required  
+                                        type="number" step="0.01"  
                                         min="0.01"
-                                        placeholder="Amount Spent (P)*" 
-                                        value={formData.amount} 
-                                        onChange={e=>setFormData({...formData, amount:e.target.value})} 
+                                        placeholder="Amount Spent (P)*"  
+                                        value={formData.amount}  
+                                        onChange={e=>setFormData({...formData, amount:e.target.value})}  
                                         className="w-full p-3 border rounded-xl bg-slate-50 border-red-300 font-bold"
                                     />
                                     
-                                    <textarea 
+                                    <textarea  
                                         required
-                                        placeholder="Description / Reason (e.g. Bought 1 bottle of Isopropyl Alcohol)" 
+                                        placeholder="Description / Reason (e.g. Bought 1 bottle of Isopropyl Alcohol)"  
                                         rows="3"
-                                        value={formData.notes} 
-                                        onChange={e=>setFormData({...formData, notes:e.target.value})} 
+                                        value={formData.notes}  
+                                        onChange={e=>setFormData({...formData, notes:e.target.value})}  
                                         className="w-full p-3 border rounded-xl bg-slate-50 resize-none"
                                     />
                                     <button className="w-full bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2 hover:bg-red-800">Submit Expense</button>
@@ -2216,13 +2239,13 @@
                                 <div className="bg-slate-50 p-4 rounded-xl border mb-6"><p className="text-xs text-slate-400 uppercase font-bold">Account</p><p className="font-bold text-logo-green-800 text-lg">{user.name}</p></div>
                                 <form onSubmit={handleUpdateProfile} className="space-y-4">
                                     <input required value={profileData.username} onChange={e=>setProfileData({...profileData, username:e.target.value})} className="w-full p-3 border rounded-lg" placeholder="New Username"/>
-                                    <input 
-                                        type="password" 
-                                        inputMode="numeric" 
+                                    <input  
+                                        type="password"  
+                                        inputMode="numeric"  
                                         maxLength={user.role === 'admin' ? 6 : 4}
-                                        value={profileData.pin} 
-                                        onChange={e=>setProfileData({...profileData, pin:e.target.value})} 
-                                        className="w-full p-3 border rounded-lg font-mono" 
+                                        value={profileData.pin}  
+                                        onChange={e=>setProfileData({...profileData, pin:e.target.value})}  
+                                        className="w-full p-3 border rounded-lg font-mono"  
                                         placeholder={`New PIN (${user.role === 'admin' ? '6' : '4'} digits. Leave blank to keep old)`}
                                     />
                                     <button className="w-full bg-logo-green-700 text-white font-bold py-3 rounded-lg">Update Credentials</button>
@@ -2232,18 +2255,18 @@
                         
                         {/* Data List Management View */}
                         {/* Only visible to admin */}
-                        {view === 'lists' && user.role === 'admin' && ( 
-                            <ListManagement 
-                                therapists={therapistsList} 
+                        {view === 'lists' && user.role === 'admin' && (  
+                            <ListManagement  
+                                therapists={therapistsList}  
                                 services={servicesList}
                                 durations={durationsList}
-                                onAdd={handleAddItem} 
+                                onAdd={handleAddItem}  
                                 onDelete={handleDeleteItem}
                                 onEdit={handleEditItem}
                             />
                         )}
 
-                        {view === 'team' && user.role === 'admin' && ( 
+                        {view === 'team' && user.role === 'admin' && (  
                             <div className="space-y-6 fade-in">
                                 <h2 className="text-lg font-bold text-logo-green-900 flex gap-2"><Icons.Users/> Manage Staff</h2>
                                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -2269,17 +2292,17 @@
                                         return a.name.localeCompare(b.name);
                                     })
                                     .map(u=>(
-                                        <div 
-                                            key={u.id} 
+                                        <div  
+                                            key={u.id}  
                                             className="p-4 border-b flex justify-between items-center hover:bg-slate-50 transition"
                                         >
                                             <div>
                                                 <h3 className="font-bold flex items-center">
-                                                    {u.name} 
-                                                    {u.username === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-logo-green-100 text-logo-green-700 ml-2">OWNER/ADMIN</span>} 
+                                                    {u.name}  
+                                                    {u.username === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-logo-green-100 text-logo-green-700 ml-2">OWNER/ADMIN</span>}  
                                                     {/* Display role names */}
-                                                    {u.username !== 'admin' && u.role === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 ml-2">ADMIN</span>} 
-                                                    {u.role === 'staff' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-2">STAFF</span>} 
+                                                    {u.username !== 'admin' && u.role === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 ml-2">ADMIN</span>}  
+                                                    {u.role === 'staff' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-2">STAFF</span>}  
                                                     {/* Online Indicator */}
                                                     {isUserOnline(u.lastActive) && (
                                                         <span className="ml-2 flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-200 animate-pulse">
@@ -2315,9 +2338,9 @@
                                                 )}
 
                                                 {/* Delete button visible to Admin */}
-                                                {user.role === 'admin' && ( 
-                                                    <button 
-                                                        onClick={(e)=>{e.stopPropagation(); handleDeleteUser(u.id)}} 
+                                                {user.role === 'admin' && (  
+                                                    <button  
+                                                        onClick={(e)=>{e.stopPropagation(); handleDeleteUser(u.id)}}  
                                                         className="p-1.5 text-slate-300 hover:text-red-500"
                                                         title="Delete User"
                                                     >
@@ -2334,20 +2357,20 @@
                                         <input required placeholder="Name" value={newUser.name} onChange={e=>setNewUser({...newUser, name:e.target.value})} className="w-full p-2 border rounded"/>
                                         <input required placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username:e.target.value})} className="w-full p-2 border rounded"/>
                                         <div className="flex gap-2">
-                                            <input 
-                                                required 
+                                            <input  
+                                                required  
                                                 maxLength={newUser.role === 'admin' ? 6 : 4} // Dynamic length
-                                                placeholder={`PIN (${newUser.role === 'admin' ? 6 : 4} digits)`} 
-                                                type="password" 
-                                                inputMode="numeric" 
-                                                value={newUser.pin} 
-                                                onChange={e=>setNewUser({...newUser, pin:e.target.value})} 
+                                                placeholder={`PIN (${newUser.role === 'admin' ? 6 : 4} digits)`}  
+                                                type="password"  
+                                                inputMode="numeric"  
+                                                value={newUser.pin}  
+                                                onChange={e=>setNewUser({...newUser, pin:e.target.value})}  
                                                 className="w-full p-2 border rounded"
                                             />
                                             {/* Role options */}
                                             <select value={newUser.role} onChange={e=>setNewUser({...newUser, role:e.target.value})} className="w-full p-2 border rounded">
-                                                <option value="staff">Staff</option> 
-                                                <option value="admin">Admin</option> 
+                                                <option value="staff">Staff (4-digit PIN)</option>  
+                                                <option value="admin">Admin (6-digit PIN)</option>  
                                             </select>
                                         </div>
                                         <button className="w-full bg-logo-green-700 text-white py-2 rounded font-bold">Add User</button>
@@ -2356,7 +2379,7 @@
                             </div>
                         )}
 
-                        {view === 'history' && user.role === 'admin' && ( 
+                        {view === 'history' && user.role === 'admin' && (  
                             <div className="space-y-4 fade-in">
                                 <h2 className="text-lg font-bold text-logo-green-900 flex gap-2"><Icons.History/> History</h2>
                                 
@@ -2436,9 +2459,9 @@
                     {view === 'dashboard' && <button onClick={()=>setView('add')} className="fixed bottom-6 right-6 bg-logo-green-700 text-white p-4 rounded-full shadow-lg hover:scale-105 transition-transform"><Icons.Plus size={28}/></button>}
 
                     {/* Admin Reset User Modal */}
-                    <AdminResetUserModal 
-                        editUserModal={editUserModal} 
-                        setEditUserModal={setEditUserModal} 
+                    <AdminResetUserModal  
+                        editUserModal={editUserModal}  
+                        setEditUserModal={setEditUserModal}  
                         handleResetPin={handleResetPin}
                         userRole={user?.role}
                     />
