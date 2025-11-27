@@ -555,6 +555,8 @@
 
             const [user, setUser] = useState(null);
             const [users, setUsers] = useState([]);
+            // NEW STATE: Tracks when the user list has been loaded (critical for login form to show)
+            const [isUsersLoaded, setIsUsersLoaded] = useState(false);
             const [transactions, setTransactions] = useState([]);
             const [history, setHistory] = useState([]);
             
@@ -783,14 +785,18 @@
             // --- 2. DATA SYNC (Listener Management) ---
             
             useEffect(() => {
-                if (!fb || !fbUser || !user) return; // Need both firebase instance and logged-in user context
+                // If Firebase client is not ready, we can't establish listeners.
+                if (!fb || !fbUser) return; 
+
                 const { db, appId } = fb;
                 const basePath = `artifacts/${appId}/public/data`;
                 
                 const getCollection = (name) => db.collection(`${basePath}/${name}`);
                 
                 let unsubTrans = () => {};
-                if (isTransactionListenerActive && view === 'dashboard') {
+                
+                // Transactions: Only set up if user is logged in AND listener is active (Dashboard view)
+                if (user && isTransactionListenerActive && view === 'dashboard') {
                     // Transactions: Use filtered query (filters by branch unless user is viewing 'ALL')
                     const transactionQuery = getFilteredQuery('transactions');
                     if (transactionQuery) {
@@ -799,14 +805,13 @@
                                 const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                                 data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
                                 setTransactions(data);
+                                // Setting dbReady here indicates that the main dashboard data has been loaded at least once
                                 setDbReady(true);
                             }, (error) => console.error("Sync Error: Transactions", error));
                     }
                 } else if (view !== 'dashboard' && isTransactionListenerActive) {
                     // Turn off listener if leaving dashboard view, even if active
                     setIsTransactionListenerActive(false);
-                } else if (!isTransactionListenerActive && view === 'dashboard') {
-                    // If listener is paused due to inactivity, keep old data.
                 }
 
                 // Users (Always Load All - Global Management List)
@@ -817,6 +822,7 @@
                         
                         if (data.length === 0) {
                             seedDefaultUsers(db, basePath);
+                            // Do not set isUsersLoaded to true yet, seeding requires another cycle
                             return;  
                         }
 
@@ -838,9 +844,15 @@
                         
                         if (!shouldWait) {
                             setUsers(data);
+                            // --- FIX: Signal that the users collection has been received ---
+                            setIsUsersLoaded(true); 
                         }
 
-                    }, (error) => console.error("Sync Error: Users", error));
+                    }, (error) => {
+                        console.error("Sync Error: Users", error);
+                        // In case of error, still proceed to login screen to avoid hard lock
+                        setIsUsersLoaded(true); 
+                    });
 
                 // Master Lists (Always Load All - Small, Global Configuration)
                 // We keep fetching all for master lists as they are usually small and cross-branch
@@ -1851,7 +1863,7 @@
 
             // LOGIN SCREEN: Must wait for user list to be loaded before showing login form
             if (!user) {
-                if (users.length === 0) {
+                if (!isUsersLoaded) {
                     // Show a second loading state while waiting for essential user data
                     return (
                         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 fade-in">
