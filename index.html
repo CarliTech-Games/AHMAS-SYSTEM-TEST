@@ -803,6 +803,8 @@
                 if (user && isTransactionListenerActive && view === 'dashboard') {
                     // Transactions: Use filtered query (filters by branch unless user is viewing 'ALL')
                     const transactionQuery = getFilteredQuery('transactions');
+                    
+                    // FIX: Check if query is valid before trying to call onSnapshot
                     if (transactionQuery) {
                         unsubTrans = transactionQuery
                             .onSnapshot((snapshot) => {
@@ -885,25 +887,30 @@
                     }, (error) => console.error("Sync Error: Durations", error));
 
                 // NEW: Future Bookings Listener
-                const unsubFuture = getFilteredQuery('future_bookings')
-                    .onSnapshot((snapshot) => {
-                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        // Sort by date (ascending) then time (ascending)
-                        data.sort((a, b) => {
-                            const dateA = a.date || '9999-12-31';
-                            const dateB = b.date || '9999-12-31';
-                            const timeA = a.time || '23:59';
-                            const timeB = b.time || '23:59';
-                            
-                            const fullA = `${dateA} ${timeA}`;
-                            const fullB = `${dateB} ${timeB}`;
+                const futureQuery = getFilteredQuery('future_bookings');
+                // FIX: Check if query is valid before trying to call onSnapshot
+                let unsubFuture = () => {};
+                if (futureQuery) {
+                    unsubFuture = futureQuery
+                        .onSnapshot((snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            // Sort by date (ascending) then time (ascending)
+                            data.sort((a, b) => {
+                                const dateA = a.date || '9999-12-31';
+                                const dateB = b.date || '9999-12-31';
+                                const timeA = a.time || '23:59';
+                                const timeB = b.time || '23:59';
+                                
+                                const fullA = `${dateA} ${timeA}`;
+                                const fullB = `${dateB} ${timeB}`;
 
-                            if (fullA < fullB) return -1;
-                            if (fullA > fullB) return 1;
-                            return 0;
-                        });
-                        setFutureBookings(data);
-                    }, (error) => console.error("Sync Error: Future Bookings", error));
+                                if (fullA < fullB) return -1;
+                                if (fullA > fullB) return 1;
+                                return 0;
+                            });
+                            setFutureBookings(data);
+                        }, (error) => console.error("Sync Error: Future Bookings", error));
+                }
 
 
                 return () => {  
@@ -925,16 +932,16 @@
                 
                 // History: Use filtered query (filters by branch unless user is viewing 'ALL')
                 const historyQuery = getFilteredQuery('history');
-                if (!historyQuery) return; // Should not happen based on outer conditions
-
-                const unsub = historyQuery
-                    .onSnapshot((snapshot) => {
+                // FIX: Check if query is valid before trying to call onSnapshot
+                const unsub = historyQuery 
+                    ? historyQuery.onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         data.sort((a, b) => getMillis(b.timestamp_val) - getMillis(a.timestamp_val));
                         setHistory(data);
                     }, (error) => {
                         console.error("Sync Error: History", error);
-                    });
+                    })
+                    : () => {}; // Return cleanup function if no listener was set
 
                 return () => unsub();
             }, [fb, fbUser, user, view]); // Added 'user' to dependencies
