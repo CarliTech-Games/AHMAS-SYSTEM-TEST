@@ -1155,9 +1155,14 @@
                 return result;
             }, [filteredTransactions, user, therapistsList]);
             
-            // Filtered History Logic (for Admin view)
+            // Filtered History Logic (Updated for Branch Privacy)
             const filteredHistory = useMemo(() => {
                 let data = history;
+
+                // 1. Filter by Branch (If not Owner Admin viewing ALL)
+                if (user && user.currentBranch !== 'ALL') {
+                    data = data.filter(h => h.branch === user.currentBranch);
+                }
 
                 if (historyStartDate) {
                     const startTimestamp = new Date(historyStartDate).getTime();
@@ -1172,8 +1177,7 @@
                 }
 
                 return data;
-            }, [history, historyStartDate, historyEndDate]);
-
+            }, [history, historyStartDate, historyEndDate, user]);
 
             const downloadCSV = (record) => {
                 // --- MODIFICATION: ADD COMMISSION HEADER AND CALCULATION ---
@@ -1979,20 +1983,20 @@
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
                             {/* REVERTED: Only show Lists/History/Team if role is 'admin' */}
-                            {user.role === 'admin' && (  
-                                <>
-                                    <button onClick={()=>setView('lists')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='lists'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.ShieldCheck size={16}/> Lists</button>
-                                    <button onClick={()=>setView('history')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='history'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.History size={16}/> History</button>
-                                    <button onClick={()=>setView('team')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='team'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'} relative`}>
-                                        <Icons.Users size={16}/> Team
-                                        {/* Badge on Navigation Tab */}
-                                        {(() => {
-                                            if (user.username !== 'admin') return null;
-                                            const count = users.filter(u => isUserOnline(u.lastActive)).length;
-                                            return count > 0 ? <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white animate-pulse">{count}</span> : null;
-                                        })()}
-                                    </button>
-                                </>
+                            {user.role === 'admin' && <button onClick={()=>setView('lists')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='lists'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.ShieldCheck size={16}/> Lists</button>}
+                            
+                            <button onClick={()=>setView('history')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='history'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.History size={16}/> History</button>
+                            
+                            {user.role === 'admin' && (
+                                <button onClick={()=>setView('team')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='team'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'} relative`}>
+                                    <Icons.Users size={16}/> Team
+                                    {/* Badge on Navigation Tab */}
+                                    {(() => {
+                                        if (user.username !== 'admin') return null;
+                                        const count = users.filter(u => isUserOnline(u.lastActive)).length;
+                                        return count > 0 ? <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white animate-pulse">{count}</span> : null;
+                                    })()}
+                                </button>
                             )}
                         </div>
 
@@ -2562,7 +2566,7 @@
                             </div>
                         )}
 
-                        {view === 'history' && user.role === 'admin' && (  
+                        {view === 'history' && (  
                             <div className="space-y-4 fade-in">
                                 <h2 className="text-lg font-bold text-logo-green-900 flex gap-2"><Icons.History/> History</h2>
                                 
@@ -2587,7 +2591,7 @@
                                                 <div><h3 className="font-bold text-slate-800">{h.date_formatted || h.date}</h3><p className="text-xs text-slate-400">{h.branch || 'Unknown'} • Closed by {h.closedBy}</p></div>
                                                 <div className="flex items-center gap-4">
                                                     <button onClick={(e)=>{e.stopPropagation();downloadCSV(h)}} title="Download CSV"><Icons.Download size={20} className="text-slate-400 hover:text-logo-green-700"/></button>
-                                                    <button onClick={(e)=>{e.stopPropagation();handleDeleteHistory(h.id, h.date)}} title="Delete Report"><Icons.Trash2 size={20} className="text-slate-400 hover:text-red-500"/></button>
+                                                    {user.role === 'admin' && <button onClick={(e)=>{e.stopPropagation();handleDeleteHistory(h.id, h.date)}} title="Delete Report"><Icons.Trash2 size={20} className="text-slate-400 hover:text-red-500"/></button>}
                                                     <span className={`font-bold ${h.stats.netCash < 0 ? 'text-red-600' : 'text-logo-green-700'}`}>{formatCurrency(h.stats.netCash)}</span>
                                                     {expandedHistoryId===h.id?<Icons.ChevronUp size={20} className="text-slate-400"/>:<Icons.ChevronDown size={20} className="text-slate-400"/>}
                                                 </div>
