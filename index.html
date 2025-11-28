@@ -1203,6 +1203,7 @@
                         ...prev,
                         [name]: {
                             service: formData.service,
+                            duration: formData.duration, // Added duration default
                             amount: formData.amount 
                         }
                     }));
@@ -1215,9 +1216,13 @@
                     const currentRow = prev[name] || {};
                     const updatedRow = { ...currentRow, [field]: value };
                     
-                    // If service changes, auto-update price based on global duration
-                    if (field === 'service') {
-                        const newPrice = calculatePrice(value, formData.duration, 0); // 0 transport, keeping it raw service price
+                    // Recalculate price if service or duration changes
+                    if (field === 'service' || field === 'duration') {
+                        // Use the new value for the changed field, or existing/default for the other
+                        const sName = field === 'service' ? value : (updatedRow.service || formData.service);
+                        const dName = field === 'duration' ? value : (updatedRow.duration || formData.duration);
+                        
+                        const newPrice = calculatePrice(sName, dName, 0); // 0 transport (raw service price)
                         updatedRow.amount = newPrice;
                     }
 
@@ -1432,19 +1437,9 @@
             };
 
             const handleDurationChange = (durationName) => {
+                // Just update global default, don't overwrite existing rows to allow mixed durations
                 const newPrice = calculatePrice(formData.service, durationName, formData.transportFee);
                 setFormData({ ...formData, duration: durationName, amount: newPrice });
-                
-                // For duration, we usually update all prices because it affects everyone
-                setTherapistRows(prev => {
-                    const updated = {};
-                    Object.keys(prev).forEach(name => {
-                        const row = prev[name];
-                        const rowPrice = calculatePrice(row.service, durationName, 0);
-                        updated[name] = { ...row, amount: rowPrice };
-                    });
-                    return Object.keys(updated).length > 0 ? updated : prev;
-                });
             };
             
             const handleTransportChange = (val) => {
@@ -1504,8 +1499,8 @@
                     // Validate individual rows
                     for (const name of selectedTherapists) {
                         const row = therapistRows[name];
-                        if (!row || !row.service || !row.amount) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Missing Details', message: `Please ensure Service and Price are set for therapist ${name}.`, onConfirm: closeModal, confirmColor: 'red' });
+                        if (!row || !row.service || !row.amount || !row.duration) {
+                            setModal({ isOpen: true, type: 'alert', title: 'Missing Details', message: `Please ensure Service, Duration, and Price are set for therapist ${name}.`, onConfirm: closeModal, confirmColor: 'red' });
                             return;
                         }
                     }
@@ -1568,7 +1563,7 @@
                             service: row.service, 
                             therapist: thName,
                             amount: finalRowAmount, 
-                            duration: formData.duration,
+                            duration: row.duration, // Use row duration
                             type: transactionType,
                             status: transactionType === 'sale' ? 'completed' : 'pending',
                             time: formData.time,
@@ -2364,24 +2359,34 @@
                                                                 <span className="font-bold text-logo-green-800 flex items-center gap-2 text-sm"><Icons.User size={16}/> {name}</span>
                                                                 <button type="button" onClick={() => toggleTherapistSelection(name)} className="text-slate-300 hover:text-red-500 transition"><Icons.X size={18}/></button>
                                                             </div>
-                                                            <div className="grid grid-cols-2 gap-3">
+                                                            <div className="flex flex-col gap-2">
                                                                 <select 
                                                                     value={therapistRows[name]?.service || ''} 
                                                                     onChange={(e) => updateTherapistRow(name, 'service', e.target.value)}
-                                                                    className="text-xs p-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none"
+                                                                    className="text-xs p-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none w-full"
                                                                 >
                                                                     <option value="" disabled>Select Service*</option>
                                                                     {servicesList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                                                                 </select>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-2.5 top-2 text-slate-400 text-xs">P</span>
-                                                                    <input 
-                                                                        type="number" 
-                                                                        value={therapistRows[name]?.amount || ''} 
-                                                                        onChange={(e) => updateTherapistRow(name, 'amount', e.target.value)}
-                                                                        className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-slate-50 font-bold text-slate-700 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none"
-                                                                        placeholder="0.00"
-                                                                    />
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    <select 
+                                                                        value={therapistRows[name]?.duration || ''} 
+                                                                        onChange={(e) => updateTherapistRow(name, 'duration', e.target.value)}
+                                                                        className="text-xs p-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none"
+                                                                    >
+                                                                        <option value="" disabled>Duration*</option>
+                                                                        {durationsList.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                                                                    </select>
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2.5 top-2 text-slate-400 text-xs">P</span>
+                                                                        <input 
+                                                                            type="number" 
+                                                                            value={therapistRows[name]?.amount || ''} 
+                                                                            onChange={(e) => updateTherapistRow(name, 'amount', e.target.value)}
+                                                                            className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-slate-50 font-bold text-slate-700 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none"
+                                                                            placeholder="0.00"
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
