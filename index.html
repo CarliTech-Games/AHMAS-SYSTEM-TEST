@@ -14,7 +14,6 @@
 
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Using Firebase Compatibility libraries for broader support -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -598,7 +597,11 @@
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
                 notes: '',
-                category: '' // Used for Expense reason
+                category: '', // Used for Expense reason
+                // --- NEW FEATURE: HOME SERVICE INTEGRATION ---
+                isHomeService: false, 
+                transportFee: '',
+                // ------------------------------------------
             });
             const [modal, setModal] = useState({
                 isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red'
@@ -752,7 +755,7 @@
 
                         } catch (error) {
                             console.error("Sync failed", error);
-                            // Keep remaining items in queue if partial fail? 
+                            // Keep remaining items in queue if partial fail?  
                             // For simplicity, we keep all if one fails to prevent data loss, or just retry next time.
                         } finally {
                             setIsGlobalLoading(false);
@@ -993,9 +996,10 @@
             const stats = useMemo(() => {
                 const data = filteredTransactions;
                 const salesRevenue = data.filter(t => (t.status === 'completed' || t.status === 'pending') && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
+                // Note: The transportation fee is NOT counted as revenue for commission/cash purposes here
                 const completedRevenue = data.filter(t => t.status === 'completed' && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 
-                // Calculate total expenses
+                // Calculate total expenses (including negative transport fees if they were logged as expenses)
                 const totalExpenses = data.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Math.abs(Number(curr.amount)), 0);
                 
                 const pendingValue = data.filter(t => t.status === 'pending' && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -1003,15 +1007,23 @@
                 const completedSales = data.filter(t => t.status === 'completed').length;
                 
                 // Calculate Net Cash
-                const netCash = completedRevenue - totalExpenses;
+                // We must account for both transaction expenses AND collected transportation fees (which are also cash-in, but usually offset by driver payout expense)
+                const totalTransportFee = data.filter(t => t.isHomeService).reduce((acc, curr) => acc + (parseFloat(curr.transportFee) || 0), 0);
+                
+                // Cash In: Completed Service Revenue + Transport Fees collected
+                const totalCashIn = completedRevenue + totalTransportFee;
+
+                // Cash Out: Logged Expenses 
+                const netCash = totalCashIn - totalExpenses;
 
                 return {  
-                    totalRevenue: completedRevenue, // Total actual revenue collected (completed sales)
+                    totalRevenue: completedRevenue, // Total actual service revenue collected (completed sales)
                     pendingValue,  
                     totalBookings,  
                     completedSales,
-                    totalExpenses, // Total money paid out
-                    netCash // Cash in hand (Completed Sales - Expenses)
+                    totalExpenses, // Total money paid out (logged expenses)
+                    totalTransportFee,
+                    netCash // Cash in hand (Completed Sales + Transport Fees - Expenses)
                 };
             }, [filteredTransactions]);
 
@@ -1028,6 +1040,7 @@
                     grouped[branch] = {
                         totalRevenue: 0,
                         totalExpenses: 0,
+                        totalTransportFee: 0, // Track separately
                         netCash: 0,
                         count: 0
                     };
@@ -1036,6 +1049,7 @@
                 transactions.forEach(t => {
                     const branch = t.branch || 'Unknown';
                     const amount = Number(t.amount);
+                    const transportFee = parseFloat(t.transportFee) || 0; // NEW
                     
                     if (!grouped[branch]) {
                         grouped[branch] = { totalRevenue: 0, totalExpenses: 0, netCash: 0, count: 0 };
@@ -1045,10 +1059,12 @@
                     
                     if (t.type !== 'expense' && t.status === 'completed') {
                         grouped[branch].totalRevenue += amount;
-                        grouped[branch].netCash += amount;
+                        grouped[branch].netCash += amount; // Service revenue is cash in
+                        grouped[branch].totalTransportFee += transportFee; // NEW: Track collected fees
+                        grouped[branch].netCash += transportFee; // NEW: Transport fee is also cash in
                     } else if (t.type === 'expense') {
                         grouped[branch].totalExpenses += Math.abs(amount);
-                        grouped[branch].netCash += amount; // Amount is stored as negative
+                        grouped[branch].netCash += amount; // Amount is stored as negative (cash out)
                     }
                 });
 
@@ -1124,7 +1140,8 @@
 
             const downloadCSV = (record) => {
                 // --- MODIFICATION: ADD COMMISSION HEADER AND CALCULATION ---
-                const headers = ['Date', 'Branch', 'Time', 'Client Name / Description', 'Service / Category', 'Duration', 'Therapist', 'Amount (Income/Expense)', 'Commission Amount', 'Status', 'Recorded By', 'Notes'];  
+                // --- NEW FEATURE: HOME SERVICE INTEGRATION - CSV HEADERS ---
+                const headers = ['Date', 'Branch', 'Time', 'Client Name / Description', 'Service / Category', 'Duration', 'Therapist', 'Amount (Service Income/Expense)', 'Commission Amount', 'Home Service', 'Transportation Fee', 'Status', 'Recorded By', 'Notes'];  
                 
                 // Helper to safely get commission from archived therapist stats
                 const getCommissionForTransaction = (t, therapistStatsArchive) => {
@@ -1157,6 +1174,10 @@
                         `"${t.therapist || ''}"`,  
                         t.amount, // Will be negative for expenses
                         commissionAmount.toFixed(2), // NEW: Commission
+                        // --- NEW FEATURE: HOME SERVICE INTEGRATION - CSV COLUMNS ---
+                        (t.isHomeService ? 'Yes' : 'No'), 
+                        (t.transportFee || 0),
+                        // -------------------------------------------------------------
                         t.status,  
                         `"${t.recordedBy || 'System'}"`,
                         `"${t.notes || ''}"`
@@ -1398,6 +1419,13 @@
                 e.preventDefault();
                 const transactionType = typeOverride || formData.type;
                 const transactionBranch = user.currentBranch === 'ALL' ? formData.targetBranch : user.currentBranch;
+                
+                // --- NEW FEATURE: HOME SERVICE INTEGRATION - VALIDATION ---
+                if (formData.isHomeService && (!formData.transportFee || parseFloat(formData.transportFee) < 0)) {
+                    setModal({ isOpen: true, type: 'alert', title: 'Missing Fee', message: 'Please enter a valid Transportation Fee for Home Service.', onConfirm: closeModal, confirmColor: 'red' });
+                    return;
+                }
+                // -------------------------------------------------------------
 
                 if (user.currentBranch === 'ALL' && !formData.targetBranch) {
                     setModal({ isOpen: true, type: 'alert', title: 'Missing Branch', message: 'Please select a Target Branch.', onConfirm: closeModal, confirmColor: 'red' });
@@ -1449,7 +1477,11 @@
                     time: formData.time,
                     recordedBy: user.name,
                     branch: transactionBranch,
-                    notes: formData.notes.trim()
+                    notes: formData.notes.trim(),
+                    // --- NEW FEATURE: HOME SERVICE INTEGRATION - PAYLOAD ---
+                    isHomeService: formData.isHomeService || false,
+                    transportFee: formData.isHomeService ? (parseFloat(formData.transportFee) || 0) : 0
+                    // --------------------------------------------------------
                 };
 
                 // OFFLINE HANDLING
@@ -1465,7 +1497,10 @@
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
                         type: 'booking', time: new Date().toTimeString().slice(0, 5),  
-                        targetBranch: resetTargetBranch, notes: '', category: ''
+                        targetBranch: resetTargetBranch, notes: '', category: '',
+                        // --- NEW FEATURE: HOME SERVICE INTEGRATION - RESET STATE ---
+                        isHomeService: false, transportFee: ''
+                        // -------------------------------------------------------------
                     });
 
                     setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} queued. Will sync when online.`, onConfirm: closeModal, confirmColor: 'orange' });
@@ -1486,7 +1521,10 @@
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
                         type: 'booking', time: new Date().toTimeString().slice(0, 5),
-                        targetBranch: resetTargetBranch, notes: '', category: ''
+                        targetBranch: resetTargetBranch, notes: '', category: '',
+                        // --- NEW FEATURE: HOME SERVICE INTEGRATION - RESET STATE ---
+                        isHomeService: false, transportFee: ''
+                        // -------------------------------------------------------------
                     });
                     
                     setModal({ isOpen: true, type: 'alert', title: 'Record Saved!', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`, onConfirm: closeModal, confirmColor: 'logo-green' });
@@ -1939,6 +1977,15 @@
                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-logo-green-100"><p className="text-slate-500 text-xs font-medium uppercase">Expenses</p><h3 className="text-xl font-bold text-slate-800 mt-1 text-red-600">{formatCurrency(stats.totalExpenses)}</h3></div>
                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-logo-green-100 border-l-[3px] border-logo-green-500"><p className="text-slate-500 text-xs font-medium uppercase flex items-center gap-1"><Icons.Wallet size={12}/> Net Cash</p><h3 className="text-xl font-bold text-logo-green-700 mt-1">{formatCurrency(stats.netCash)}</h3></div>
                                 </div>
+                                {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - DASHBOARD STATS --- */}
+                                {stats.totalTransportFee > 0 && (
+                                    <div className="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100">
+                                        <p className="text-blue-600 text-xs font-medium uppercase flex items-center gap-1"><Icons.Home size={12}/> Collected Transport Fees</p>
+                                        <h3 className="text-xl font-bold text-blue-800 mt-1">{formatCurrency(stats.totalTransportFee)}</h3>
+                                    </div>
+                                )}
+                                {/* ------------------------------------------------------------- */}
+
 
                                 <div className="bg-white p-4 rounded-xl shadow-sm border border-logo-green-100">
                                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><Icons.Trophy size={16} className="text-logo-green-700"/> Payroll Estimate ({user.currentBranch})</h3>
@@ -2032,6 +2079,9 @@
                                                     {/* Displaying timestamp date for consistency */}
                                                     <div className="flex gap-2 mb-1 items-center">
                                                         <span className="text-[10px] font-bold bg-slate-100 px-2 rounded text-slate-500">{t.branch}</span>
+                                                        {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - TAG IN DASHBOARD --- */}
+                                                        {t.isHomeService && <span className="text-[10px] font-bold bg-blue-100 px-2 py-0.5 rounded-full text-blue-700 flex items-center gap-1"><Icons.Home size={10}/> HOME</span>}
+                                                        {/* ----------------------------------------------------------------- */}
                                                         <span className="text-xs font-mono text-slate-400">{formatDate(t.timestamp)} - {t.time}</span>
                                                     </div>
                                                     
@@ -2048,6 +2098,9 @@
                                                                 <span>{t.service}</span>
                                                                 {t.duration && <span> • {t.duration}</span>}
                                                                 <span> • {t.therapist}</span>
+                                                                {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - TRANSPORT FEE IN DETAILS --- */}
+                                                                {t.isHomeService && t.transportFee > 0 && <span> • Transport Fee: <span className="font-bold text-blue-600">{formatCurrency(t.transportFee)}</span></span>}
+                                                                {/* ------------------------------------------------------------------------- */}
                                                             </>
                                                         )}
                                                     </div>
@@ -2127,7 +2180,33 @@
                                             {therapistsList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                                         </select>
                                     </div>
-                                    
+
+                                    {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - TOGGLE & INPUT --- */}
+                                    <div className="bg-slate-50 p-3 rounded-xl border space-y-3 transition-all">
+                                        <label className="flex items-center justify-between cursor-pointer">
+                                            <div className="flex items-center gap-2">
+                                                <Icons.Home size={20} className={formData.isHomeService ? 'text-logo-green-600' : 'text-slate-400'}/>
+                                                <span className="font-bold text-sm">Home Service (Additional Fee)</span>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.isHomeService}
+                                                onChange={(e) => setFormData({...formData, isHomeService: e.target.checked, transportFee: ''})}
+                                                className="w-4 h-4 text-logo-green-600 bg-slate-100 border-gray-300 rounded focus:ring-logo-green-500"
+                                            />
+                                        </label>
+                                        {formData.isHomeService && (
+                                            <input required={formData.isHomeService}  
+                                                type="number" step="0.01"  
+                                                placeholder="Transportation Fee (P)*"  
+                                                value={formData.transportFee}  
+                                                onChange={e=>setFormData({...formData, transportFee:e.target.value})}  
+                                                className="w-full p-3 border rounded-xl bg-white"
+                                            />
+                                        )}
+                                    </div>
+                                    {/* ------------------------------------------------------------- */}
+
                                     {/* Service Notes Textarea */}
                                     <textarea  
                                         placeholder="Service Notes (e.g., Hard pressure, No oil on back, Client prefers quiet)"  
@@ -2141,7 +2220,7 @@
                                         {/* Price is now editable and required, auto-filled by service selection */}
                                         <input required  
                                             type="number" step="0.01"  
-                                            placeholder="Price (P)*"  
+                                            placeholder="Service Price (P)*"  
                                             value={formData.amount}  
                                             onChange={e=>setFormData({...formData, amount:e.target.value})}  
                                             className="w-full p-3 border rounded-xl bg-slate-50"
