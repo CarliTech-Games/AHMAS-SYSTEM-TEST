@@ -79,6 +79,15 @@
             'Lapu-lapu',  
             'AS Fortuna'
         ];
+
+        // ADDED: Service Categories
+        const SERVICE_CATEGORIES = [
+            'Specialized Massage',
+            'Relax & Revive',
+            'Premium Massage',
+            'Add-ons',
+            'Others'
+        ];
         
         // --- FIREBASE CONFIGURATION ---
         const MANUAL_FIREBASE_CONFIG = {
@@ -215,6 +224,7 @@
             
             // Add State
             const [newItemName, setNewItemName] = useState('');
+            const [newItemCategory, setNewItemCategory] = useState(SERVICE_CATEGORIES[0]); // ADDED: Service Category State
             const [newItemPrices, setNewItemPrices] = useState({});  
             const [newItemCommission, setNewItemCommission] = useState('');  
             
@@ -234,7 +244,8 @@
                 let extraData = null;
                 if (activeTab === 'service') {
                     if (durations.length === 0) return; 
-                    extraData = newItemPrices;
+                    // ADDED: Include category in extraData
+                    extraData = { prices: newItemPrices, category: newItemCategory };
                 } else if (activeTab === 'therapist') {
                     extraData = { commissionRate: parseFloat(newItemCommission) || 0 };
                 }
@@ -349,6 +360,18 @@
                             {/* Dynamic Price Inputs for Services */}
                             {activeTab === 'service' && (
                                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                    {/* ADDED: Category Selector */}
+                                    <div className="mb-3">
+                                        <label className="text-xs font-bold text-slate-500 mb-1 block uppercase">Category</label>
+                                        <select 
+                                            value={newItemCategory} 
+                                            onChange={e => setNewItemCategory(e.target.value)}
+                                            className="w-full p-2 border rounded-lg text-sm bg-white outline-none"
+                                        >
+                                            {SERVICE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                        </select>
+                                    </div>
+
                                     <p className="text-xs font-bold text-slate-500 mb-2 uppercase">Set Prices per Duration (Optional)</p>
                                     {durations.length === 0 && <p className="text-xs text-red-400 italic">Add items to "Minutes" tab first to set prices.</p>}
                                     <div className="grid grid-cols-2 gap-2">
@@ -420,7 +443,13 @@
                                                         className="flex-1 p-2 border rounded text-sm bg-white focus:ring-2 focus:ring-logo-green-500 mr-2"
                                                     />
                                                 ) : (
-                                                    <span className="text-slate-700 font-medium">{item.name}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-slate-700 font-medium">{item.name}</span>
+                                                        {/* ADDED: Show Category in List */}
+                                                        {activeTab === 'service' && item.category && (
+                                                            <span className="text-[10px] text-slate-400 uppercase">{item.category}</span>
+                                                        )}
+                                                    </div>
                                                 )}
                                                 
                                                 <div className="flex gap-1">
@@ -957,6 +986,27 @@
 
             // --- 3. HELPERS ---
             
+            // ADDED: Helper to Group Services by Category
+            const groupedServices = useMemo(() => {
+                const groups = {};
+                // Initialize groups based on constants to ensure order
+                SERVICE_CATEGORIES.forEach(cat => groups[cat] = []);
+                
+                servicesList.forEach(s => {
+                    const cat = s.category || 'Others'; // Default to 'Others' if undefined
+                    if (!groups[cat]) {
+                        // If category not in standard list, put in 'Others' or create new group? 
+                        // Let's create new group to be safe, or just push to Others.
+                        // For now, let's force standard categories.
+                        if (groups['Others']) groups['Others'].push(s);
+                        else groups[cat] = [s];
+                    } else {
+                        groups[cat].push(s);
+                    }
+                });
+                return groups;
+            }, [servicesList]);
+
             const seedDefaultUsers = async (db, basePath) => {
                 const defaults = [
                     { name: 'Owner Admin', username: 'admin', pin: '888888', role: 'admin' },  
@@ -1295,7 +1345,15 @@
                 } else if (listType === 'service') {
                     collectionName = 'services';
                     checkList = servicesList;
-                    if (extraData) data.prices = extraData;  
+                    // UPDATED: Handle extraData which now contains prices AND category
+                    if (extraData) {
+                        if (extraData.prices || extraData.category) {
+                            data.prices = extraData.prices || {};
+                            data.category = extraData.category || 'Others';
+                        } else {
+                            data.prices = extraData; // Fallback
+                        }
+                    } 
                 } else if (listType === 'duration') {
                     collectionName = 'durations';
                     checkList = durationsList;
@@ -2496,7 +2554,11 @@
                                                                     className="text-xs p-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none w-full"
                                                                 >
                                                                     <option value="" disabled>Select Service*</option>
-                                                                    {servicesList.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                                                    {Object.entries(groupedServices).map(([category, services]) => (
+                                                                        <optgroup key={category} label={category}>
+                                                                            {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                                                        </optgroup>
+                                                                    ))}
                                                                 </select>
                                                                 <div className="grid grid-cols-2 gap-2">
                                                                     <select 
