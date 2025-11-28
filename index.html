@@ -1166,11 +1166,22 @@
                     return 0;
                 };
 
+                // FIX: Use short date to prevent Excel ####### error
+                let dateStr = record.date;
+                try {
+                    const d = new Date(record.date);
+                    if (!isNaN(d.getTime())) {
+                        dateStr = d.toLocaleDateString(); 
+                    }
+                } catch (e) {
+                    // Fallback to original string if parse fails
+                }
+
                 const rows = record.transactions.map(t => {
                     const commissionAmount = getCommissionForTransaction(t, record.therapist_stats || {});
 
                     return [
-                        `"${record.date}"`,  
+                        `"${dateStr}"`,  
                         `"${t.branch || 'N/A'}"`,  
                         `"${t.time}"`,  
                         `"${t.clientName || t.description || ''}"`, 
