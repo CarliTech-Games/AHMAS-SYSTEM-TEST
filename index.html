@@ -12,8 +12,10 @@
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- FIXED: Pointing to UMD build for browser compatibility -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
+    <!-- Using Firebase Compatibility libraries for broader support -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -26,21 +28,15 @@
                     colors: {
                         'logo-green': {
                             50: '#E6FFE6',        // Very light background
-                            100: '#CCFFCC',        // Light background
-                            500: '#00B300',        // Medium
-                            600: '#009900',        // Primary Button Hover
-                            700: '#008000',        // Base Logo Green / Primary
-                            800: '#006600',        // Darker text/header
-                            900: '#004C00',        // Deepest text
+                            100: '#CCFFCC',       // Light background
+                            500: '#00B300',       // Medium
+                            600: '#009900',       // Primary Button Hover
+                            700: '#008000',       // Base Logo Green / Primary
+                            800: '#006600',       // Darker text/header
+                            900: '#004C00',       // Deepest text
                         },
                         'teal': {
                             600: '#008080', // Keep some teal accent for contrast
-                        },
-                        'future-blue': {
-                            50: '#EEF6FF',
-                            700: '#006FFF',
-                            800: '#005CE6',
-                            900: '#004CBE',
                         }
                     }
                 }
@@ -111,11 +107,13 @@
                 tempIcon.setAttribute('data-lucide', name);
                 wrapperRef.current.innerHTML = '';
                 wrapperRef.current.appendChild(tempIcon);
-                lucide.createIcons({
-                    root: wrapperRef.current,
-                    nameAttr: 'data-lucide',
-                    attrs: { width: size, height: size, class: className, ...props }
-                });
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons({
+                        root: wrapperRef.current,
+                        nameAttr: 'data-lucide',
+                        attrs: { width: size, height: size, class: className, ...props }
+                    });
+                }
             }, [name, size, className]);
             return <span ref={wrapperRef} style={{ display: 'inline-flex', verticalAlign: 'middle' }}></span>;
         };
@@ -131,6 +129,8 @@
             Users: (p) => <Icon name="users" {...p} />,
             Sparkles: (p) => <Icon name="sparkles" {...p} />,
             Home: (p) => <Icon name="home" {...p} />,
+            Building2: (p) => <Icon name="building-2" {...p} />,
+            Car: (p) => <Icon name="car" {...p} />,
             UserCircle2: (p) => <Icon name="user-circle-2" {...p} />,
             History: (p) => <Icon name="history" {...p} />,
             ChevronDown: (p) => <Icon name="chevron-down" {...p} />,
@@ -157,11 +157,7 @@
             ClipboardList: (p) => <Icon name="clipboard-list" {...p} />,
             MinusCircle: (p) => <Icon name="minus-circle" {...p} />,
             Wallet: (p) => <Icon name="wallet" {...p} />,
-            TrendingUp: (p) => <Icon name="trending-up" {...p} />,
-            BookOpen: (p) => <Icon name="book-open" {...p} />, // NEW Icon for Future Bookings
-            Minimize2: (p) => <Icon name="minimize-2" {...p} />,
-            Maximize2: (p) => <Icon name="maximize-2" {...p} />,
-            Ticket: (p) => <Icon name="ticket" {...p} />,
+            TrendingUp: (p) => <Icon name="trending-up" {...p} />  
         };
 
         // --- SECURITY HELPER: Hashing Function ---
@@ -188,21 +184,6 @@
             if (typeof ts.toMillis === 'function') return ts.toMillis(); // Firestore Timestamp object (V9+)
             if (ts.seconds) return ts.seconds * 1000; // Raw object fallback (V8/Compat)
             return 0;
-        };
-        
-        // Helper to format date to YYYY-MM-DD for input fields
-        const formatDateForInput = (date = new Date()) => {
-            const d = date instanceof Date ? date : new Date(date);
-            let month = '' + (d.getMonth() + 1);
-            let day = '' + d.getDate();
-            const year = d.getFullYear();
-
-            if (month.length < 2) 
-                month = '0' + month;
-            if (day.length < 2) 
-                day = '0' + day;
-
-            return [year, month, day].join('-');
         };
 
         // --- Loading Component ---
@@ -567,185 +548,6 @@
         };
 
 
-        // --- NEW FEATURE: FUTURE BOOKINGS VIEW COMPONENT ---
-        const FutureBookingsView = ({ futureBookings, therapistsList, user, fb, setModal, closeModal, formatCurrency, isGlobalLoading, setIsGlobalLoading, requestDeleteFuture }) => {
-            const [expandedId, setExpandedId] = useState(null);
-            const [isEditing, setIsEditing] = useState(false);
-            const [editData, setEditData] = useState(null);
-            
-            // Filter future bookings by the user's current branch (if not ALL)
-            const filteredFutureBookings = useMemo(() => {
-                if (user.currentBranch === 'ALL') return futureBookings;
-                return futureBookings.filter(b => b.branch === user.currentBranch);
-            }, [futureBookings, user.currentBranch]);
-
-            const startEdit = (booking) => {
-                setEditData({ 
-                    ...booking,
-                    date: formatDateForInput(new Date(booking.date)) 
-                });
-                setIsEditing(true);
-            };
-
-            const handleStatusChange = (booking, newStatus) => {
-                const action = newStatus === 'cancelled' ? 'Cancel' : 'Mark as No Show';
-                setModal({
-                    isOpen: true, type: 'confirm', title: `${action} Booking?`, message: `Are you sure you want to change the status of ${booking.clientName} on ${booking.date} to ${newStatus.toUpperCase()}?`, confirmColor: newStatus === 'cancelled' ? 'red' : 'orange',
-                    onConfirm: async () => {
-                        closeModal();
-                        setIsGlobalLoading(true);
-                        try {
-                            const basePath = `artifacts/${fb.appId}/public/data`;
-                            await fb.db.collection(`${basePath}/futureBookings`).doc(booking.id).update({ status: newStatus });
-                        } catch (err) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to update status.', confirmColor: 'red', onConfirm: closeModal });
-                        } finally {
-                            setIsGlobalLoading(false);
-                        }
-                    }
-                });
-            };
-
-            const handleUpdateBooking = async (e) => {
-                e.preventDefault();
-                if (!editData) return;
-                
-                // --- CONFLICT CHECK ---
-                const isConflict = filteredFutureBookings.some(b => 
-                    b.therapist === editData.therapist &&
-                    b.time === editData.time &&
-                    b.date === editData.date &&
-                    b.id !== editData.id &&
-                    b.status === 'pending'
-                );
-
-                if (isConflict) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Booking Conflict', message: `Therapist ${editData.therapist} is already booked at ${editData.time} on ${editData.date}.`, onConfirm: closeModal, confirmColor: 'red' });
-                    return;
-                }
-                // -----------------------
-
-                setIsGlobalLoading(true);
-                try {
-                    const basePath = `artifacts/${fb.appId}/public/data`;
-                    const updatePayload = {
-                        date: editData.date,
-                        time: editData.time,
-                        therapist: editData.therapist,
-                        notes: editData.notes || '',
-                        recordedBy: user.name, // Record who updated it
-                    };
-
-                    await fb.db.collection(`${basePath}/futureBookings`).doc(editData.id).update(updatePayload);
-                    setIsEditing(false);
-                    setEditData(null);
-                    setModal({ isOpen: true, type: 'alert', title: 'Updated!', message: 'Future booking successfully modified.', confirmColor: 'logo-green', onConfirm: closeModal });
-                } catch (error) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to update booking.', confirmColor: 'red', onConfirm: closeModal });
-                } finally {
-                    setIsGlobalLoading(false);
-                }
-            };
-
-            const statusStyles = {
-                pending: { bg: 'bg-future-blue-50', text: 'text-future-blue-700', icon: 'BookOpen', border: 'border-future-blue-700' },
-                cancelled: { bg: 'bg-red-50', text: 'text-red-700', icon: 'X', border: 'border-red-700' },
-                noshow: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'AlertTriangle', border: 'border-orange-700' },
-            };
-
-            return (
-                <div className="space-y-6 fade-in">
-                    <h2 className="text-lg font-bold text-future-blue-700 flex gap-2 items-center"><Icons.Calendar size={18}/> Future Bookings ({user.currentBranch})</h2>
-
-                    {filteredFutureBookings.length === 0 ? (
-                        <div className="text-center py-12 border border-dashed rounded-xl text-slate-400 text-sm">No future bookings found for the current branch.</div>
-                    ) : (
-                        <div className="space-y-3">
-                            {filteredFutureBookings.map(b => {
-                                const styles = statusStyles[b.status] || statusStyles.pending;
-                                return (
-                                    <div key={b.id} className={`bg-white p-4 rounded-xl border-l-[6px] shadow-sm ${styles.border} ${styles.bg}`}>
-                                        <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}>
-                                            <div className="flex-1 pr-4">
-                                                <div className="flex gap-2 mb-1 items-center">
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${styles.bg} ${styles.text} flex items-center gap-1`}><Icons.Ticket size={10}/> {b.status.toUpperCase()}</span>
-                                                    <span className="text-xs font-mono text-slate-400">{b.branch}</span>
-                                                </div>
-                                                <h3 className="font-bold text-slate-800">{b.clientName}</h3>
-                                                <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-2">
-                                                    <span><Icons.Calendar size={10} className="inline mr-1"/> {b.date}</span>
-                                                    <span><Icons.Clock size={10} className="inline mr-1"/> {b.time}</span>
-                                                    <span><Icons.Users size={10} className="inline mr-1"/> {b.therapist}</span>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="font-bold text-lg text-logo-green-700">{formatCurrency(b.amount)}</div>
-                                                <div className="flex justify-end mt-1">
-                                                    {expandedId === b.id ? <Icons.Minimize2 size={20} className="text-slate-400"/> : <Icons.Maximize2 size={20} className="text-slate-400"/>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {expandedId === b.id && (
-                                            <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
-                                                
-                                                <p className="text-xs text-slate-700"><span className="font-bold">Service:</span> {b.service} ({b.duration})</p>
-                                                {b.isHomeService && <p className="text-xs text-blue-700 font-bold"><Icons.Home size={12} className="inline mr-1"/> Home Service: {formatCurrency(b.transportFee)}</p>}
-                                                {b.notes && b.notes.trim() && <p className="text-xs text-slate-500 italic mt-2">Notes: {b.notes}</p>}
-                                                
-                                                <div className="flex gap-2 pt-2 border-t mt-3">
-                                                    
-                                                    {b.status === 'pending' && !isEditing && (
-                                                        <button onClick={() => startEdit(b)} className="px-3 py-1.5 text-xs text-blue-500 bg-blue-50 rounded hover:bg-blue-100 flex items-center gap-1"><Icons.Pencil size={12}/> Edit Details</button>
-                                                    )}
-                                                    
-                                                    {b.status === 'pending' && (
-                                                        <>
-                                                            <button onClick={() => handleStatusChange(b, 'cancelled')} className="px-3 py-1.5 text-xs text-red-500 bg-red-50 rounded hover:bg-red-100 flex items-center gap-1"><Icons.X size={12}/> Cancel</button>
-                                                            <button onClick={() => handleStatusChange(b, 'noshow')} className="px-3 py-1.5 text-xs text-orange-500 bg-orange-50 rounded hover:bg-orange-100 flex items-center gap-1"><Icons.AlertTriangle size={12}/> No Show</button>
-                                                        </>
-                                                    )}
-                                                    
-                                                    {user.role === 'admin' && (b.status === 'cancelled' || b.status === 'noshow') && (
-                                                        <button onClick={() => requestDeleteFuture(b.id)} className="px-3 py-1.5 text-xs text-red-500 bg-red-50 rounded hover:bg-red-100 flex items-center gap-1 ml-auto"><Icons.Trash2 size={12}/> Delete</button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Simple modal wrapper for nested modals (Edit Booking) */}
-                    {isEditing && editData && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60">
-                            <div className="bg-white rounded-xl p-6 w-full max-w-sm">
-                                <h3 className="font-bold text-lg mb-4">Edit Future Booking</h3>
-                                <form onSubmit={handleUpdateBooking} className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <input type="date" required value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} className="p-3 border rounded-lg text-sm bg-slate-50"/>
-                                        <input type="time" required value={editData.time || ''} onChange={e => setEditData({ ...editData, time: e.target.value })} className="p-3 border rounded-lg text-sm bg-slate-50"/>
-                                    </div>
-                                    <select required value={editData.therapist || ''} onChange={e => setEditData({ ...editData, therapist: e.target.value })} className="w-full p-3 border rounded-lg text-sm bg-slate-50 appearance-none">
-                                        <option value="" disabled>Change Therapist</option>
-                                        {therapistsList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                                    </select>
-                                    <textarea placeholder="Update Notes" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} className="w-full p-3 border rounded-lg text-sm bg-slate-50 resize-none" rows="2"></textarea>
-                                    <div className="flex gap-2 justify-end pt-2">
-                                        <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-500 rounded hover:bg-slate-100">Cancel</button>
-                                        <button type="submit" className="px-4 py-2 text-white bg-logo-green-600 rounded">Save Changes</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        };
-        // --- END NEW FEATURE: FUTURE BOOKINGS VIEW COMPONENT ---
-
-
         // --- MAIN APP ---
         const App = () => {
             const [fb, setFb] = useState(null);
@@ -760,10 +562,9 @@
             const [transactions, setTransactions] = useState([]);
             const [history, setHistory] = useState([]);
             
-            // --- NEW FEATURE: FUTURE BOOKINGS STATE ---
-            const [futureBookings, setFutureBookings] = useState([]);
-            // ------------------------------------------
-            
+            // NEW: Dashboard Date Filter
+            const [dashboardDate, setDashboardDate] = useState(new Date().toISOString().split('T')[0]);
+
             // NEW: Offline Queue State
             const [offlineQueue, setOfflineQueue] = useState([]);
             
@@ -794,9 +595,6 @@
             const [newUser, setNewUser] = useState({ name: '', username: '', pin: '', role: 'staff' });
             const [profileData, setProfileData] = useState({ username: '', pin: '' });
             
-            // Get today's date for default form value
-            const todayDate = useMemo(() => formatDateForInput(new Date()), []);
-
             // Added expense-related fields and viewType
             const [formData, setFormData] = useState({
                 clientName: '',  
@@ -804,24 +602,16 @@
                 therapist: '',  
                 amount: '',  
                 duration: '',  
-                type: 'booking', // booking, sale, expense, futureBooking (virtual type for form)
-                date: todayDate, // NEW: Date field, defaults to today
+                type: 'booking', // booking, sale, expense
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
                 notes: '',
                 category: '', // Used for Expense reason
-                isHomeService: false, 
-                transportFee: '',
+                // NEW FIELDS FOR HOME SERVICE / DATES
+                bookingDate: new Date().toISOString().split('T')[0],
+                location: 'spa', // 'spa' or 'home'
+                transportFee: '' 
             });
-
-            useEffect(() => {
-                // Ensure date defaults to today when mounting/resetting the form
-                if (formData.date !== todayDate) {
-                    setFormData(prev => ({ ...prev, date: todayDate }));
-                }
-            }, [todayDate]);
-
-
             const [modal, setModal] = useState({
                 isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red'
             });
@@ -974,7 +764,8 @@
 
                         } catch (error) {
                             console.error("Sync failed", error);
-                            // Keep remaining items in queue if partial fail?  
+                            // Keep remaining items in queue if partial fail? 
+                            // For simplicity, we keep all if one fails to prevent data loss, or just retry next time.
                         } finally {
                             setIsGlobalLoading(false);
                         }
@@ -1000,7 +791,14 @@
                     unsubTrans = getCollection('transactions')
                         .onSnapshot((snapshot) => {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
+                            // Sort by Date Descending, then Time Descending
+                            data.sort((a, b) => {
+                                const dateA = a.bookingDate || formatDate(a.timestamp); // Fallback for old records
+                                const dateB = b.bookingDate || formatDate(b.timestamp);
+                                if (dateA !== dateB) return dateB.localeCompare(dateA); // Newest Date First
+                                
+                                return getMillis(b.timestamp) - getMillis(a.timestamp);
+                            });
                             setTransactions(data);
                             setDbReady(true);
                         }, (error) => console.error("Sync Error: Transactions", error));
@@ -1011,24 +809,6 @@
                     // If listener is paused due to inactivity, transactions state will be stale.
                     // We keep the old data for display and wait for reconnection.
                 }
-                
-                // --- NEW FEATURE: FUTURE BOOKINGS LISTENER ---
-                let unsubFutureBookings = () => {};
-                if (view === 'futureBookings' || view === 'add') { // Keep listener active in 'add' view for conflict check
-                    unsubFutureBookings = getCollection('futureBookings')
-                        .onSnapshot((snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            // Sort by Date, then Time
-                            data.sort((a, b) => {
-                                const dateA = new Date(`${a.date} ${a.time}`).getTime();
-                                const dateB = new Date(`${b.date} ${b.time}`).getTime();
-                                return dateA - dateB;
-                            });
-                            setFutureBookings(data);
-                        }, (error) => console.error("Sync Error: Future Bookings", error));
-                }
-                // ---------------------------------------------
-
 
                 // Users (Always Load - Needed for Login/Team Management)
                 const unsubUsers = getCollection('users')
@@ -1094,7 +874,6 @@
                     unsubTherapists();  
                     unsubServices();
                     unsubDurations();
-                    unsubFutureBookings(); // NEW: Cleanup listener
                 };
             }, [fb, fbUser, isTransactionListenerActive, view]); // DEPENDENCY: isTransactionListenerActive now controls transaction sync
 
@@ -1225,6 +1004,28 @@
                     data = data.filter(t => t.recordedBy === user.name);
                 }
                 
+                // 3. Filter by Dashboard Date (Future Bookings vs Live Records)
+                if (view === 'dashboard') {
+                    data = data.filter(t => {
+                        // Fallback for old records without bookingDate (assume they are 'today' based on timestamp)
+                        const recordDate = t.bookingDate || formatDate(t.timestamp); 
+                        // Note: formatDate returns 'M/D/YYYY' format dependent on locale, but dashboardDate is 'YYYY-MM-DD'.
+                        // Ideally we normalize.
+                        
+                        // Robust Date Comparison
+                        let recordDateStr = '';
+                        if (t.bookingDate) {
+                            recordDateStr = t.bookingDate; // Already YYYY-MM-DD
+                        } else {
+                            // Convert timestamp to YYYY-MM-DD
+                            const d = new Date(getMillis(t.timestamp));
+                            recordDateStr = d.toISOString().split('T')[0];
+                        }
+                        
+                        return recordDateStr === dashboardDate;
+                    });
+                }
+                
                 return data;
             };
 
@@ -1233,10 +1034,9 @@
             const stats = useMemo(() => {
                 const data = filteredTransactions;
                 const salesRevenue = data.filter(t => (t.status === 'completed' || t.status === 'pending') && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                // Note: The transportation fee is NOT counted as revenue for commission/cash purposes here
                 const completedRevenue = data.filter(t => t.status === 'completed' && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 
-                // Calculate total expenses (including negative transport fees if they were logged as expenses)
+                // Calculate total expenses
                 const totalExpenses = data.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Math.abs(Number(curr.amount)), 0);
                 
                 const pendingValue = data.filter(t => t.status === 'pending' && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -1244,23 +1044,15 @@
                 const completedSales = data.filter(t => t.status === 'completed').length;
                 
                 // Calculate Net Cash
-                // We must account for both transaction expenses AND collected transportation fees (which are also cash-in, but usually offset by driver payout expense)
-                const totalTransportFee = data.filter(t => t.isHomeService).reduce((acc, curr) => acc + (parseFloat(curr.transportFee) || 0), 0);
-                
-                // Cash In: Completed Service Revenue + Transport Fees collected
-                const totalCashIn = completedRevenue + totalTransportFee;
-
-                // Cash Out: Logged Expenses 
-                const netCash = totalCashIn - totalExpenses;
+                const netCash = completedRevenue - totalExpenses;
 
                 return {  
-                    totalRevenue: completedRevenue, // Total actual service revenue collected (completed sales)
+                    totalRevenue: completedRevenue, // Total actual revenue collected (completed sales)
                     pendingValue,  
                     totalBookings,  
                     completedSales,
-                    totalExpenses, // Total money paid out (logged expenses)
-                    totalTransportFee,
-                    netCash // Cash in hand (Completed Sales + Transport Fees - Expenses)
+                    totalExpenses, // Total money paid out
+                    netCash // Cash in hand (Completed Sales - Expenses)
                 };
             }, [filteredTransactions]);
 
@@ -1277,16 +1069,16 @@
                     grouped[branch] = {
                         totalRevenue: 0,
                         totalExpenses: 0,
-                        totalTransportFee: 0, // Track separately
                         netCash: 0,
                         count: 0
                     };
                 });
 
-                transactions.forEach(t => {
+                // Use filteredTransactions (which is now filtered by Date) instead of all transactions
+                // ensuring the summary matches the selected day.
+                filteredTransactions.forEach(t => {
                     const branch = t.branch || 'Unknown';
                     const amount = Number(t.amount);
-                    const transportFee = parseFloat(t.transportFee) || 0; // NEW
                     
                     if (!grouped[branch]) {
                         grouped[branch] = { totalRevenue: 0, totalExpenses: 0, netCash: 0, count: 0 };
@@ -1296,12 +1088,10 @@
                     
                     if (t.type !== 'expense' && t.status === 'completed') {
                         grouped[branch].totalRevenue += amount;
-                        grouped[branch].netCash += amount; // Service revenue is cash in
-                        grouped[branch].totalTransportFee += transportFee; // NEW: Track collected fees
-                        grouped[branch].netCash += transportFee; // NEW: Transport fee is also cash in
+                        grouped[branch].netCash += amount;
                     } else if (t.type === 'expense') {
                         grouped[branch].totalExpenses += Math.abs(amount);
-                        grouped[branch].netCash += amount; // Amount is stored as negative (cash out)
+                        grouped[branch].netCash += amount; // Amount is stored as negative
                     }
                 });
 
@@ -1317,7 +1107,7 @@
                         return indexA - indexB;
                     });
 
-            }, [user?.currentBranch, user?.role, transactions]);
+            }, [user?.currentBranch, user?.role, filteredTransactions]);
             // END NEW BRANCH FINANCIALS
 
             // Therapist Stats by Branch
@@ -1341,10 +1131,19 @@
                     if (!grouped[branch][name]) grouped[branch][name] = { name, count: 0, amount: 0, commission: 0, rate };
                     
                     const amount = Number(t.amount);
+                    
+                    // Subtract transport fee from commissionable amount if applicable?
+                    // Usually commission is on SERVICE price, not transport.
+                    // Let's assume we need to deduct transport fee to find base service price.
+                    let commissionableAmount = amount;
+                    if (t.transportFee) {
+                        commissionableAmount = amount - Number(t.transportFee);
+                    }
+
                     grouped[branch][name].count++;
-                    grouped[branch][name].amount += amount;
+                    grouped[branch][name].amount += commissionableAmount;
                     // Calculate commission based on rate
-                    grouped[branch][name].commission += amount * (rate / 100);
+                    grouped[branch][name].commission += commissionableAmount * (rate / 100);
                 });
 
                 const result = {};
@@ -1377,8 +1176,7 @@
 
             const downloadCSV = (record) => {
                 // --- MODIFICATION: ADD COMMISSION HEADER AND CALCULATION ---
-                // --- NEW FEATURE: HOME SERVICE INTEGRATION - CSV HEADERS ---
-                const headers = ['Date', 'Branch', 'Time', 'Client Name / Description', 'Service / Category', 'Duration', 'Therapist', 'Amount (Service Income/Expense)', 'Commission Amount', 'Home Service', 'Transportation Fee', 'Status', 'Recorded By', 'Notes'];  
+                const headers = ['Date', 'Branch', 'Time', 'Client Name / Description', 'Service / Category', 'Duration', 'Therapist', 'Location', 'Transport Fee', 'Total Amount', 'Commission Amount', 'Status', 'Recorded By', 'Notes'];  
                 
                 // Helper to safely get commission from archived therapist stats
                 const getCommissionForTransaction = (t, therapistStatsArchive) => {
@@ -1389,9 +1187,11 @@
                         if (therapistStatsArchive[branch]) {
                             const therapistData = therapistStatsArchive[branch].find(s => s.name === therapistName);
                             if (therapistData) {
-                                // Since the stats contain the total commission for the day, we need to recalculate
-                                // the commission for this single transaction using the saved rate.
-                                return Number(t.amount) * (therapistData.rate / 100);
+                                // Re-calculate based on (Amount - Transport)
+                                let baseAmount = Number(t.amount);
+                                if(t.transportFee) baseAmount -= Number(t.transportFee);
+                                
+                                return baseAmount * (therapistData.rate / 100);
                             }
                         }
                     }
@@ -1409,12 +1209,10 @@
                         `"${t.service || t.category || ''}"`, // Use service or category
                         `"${t.duration || ''}"`,  
                         `"${t.therapist || ''}"`,  
+                        `"${t.location === 'home' ? 'Home Service' : 'In Spa'}"`,
+                        t.transportFee || '0',
                         t.amount, // Will be negative for expenses
                         commissionAmount.toFixed(2), // NEW: Commission
-                        // --- NEW FEATURE: HOME SERVICE INTEGRATION - CSV COLUMNS ---
-                        (t.isHomeService ? 'Yes' : 'No'), 
-                        (t.transportFee || 0),
-                        // -------------------------------------------------------------
                         t.status,  
                         `"${t.recordedBy || 'System'}"`,
                         `"${t.notes || ''}"`
@@ -1563,30 +1361,6 @@
                     }
                 });
             };
-
-            // --- NEW FEATURE: FUTURE BOOKINGS DELETE ---
-            const requestDeleteFuture = (id) => {
-                if (user?.role !== 'admin') {  
-                    setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only Admin can delete permanent records.', onConfirm: closeModal, confirmColor: 'red' });  
-                    return;
-                }
-                setModal({
-                    isOpen: true, type: 'confirm', title: 'Delete Future Record?', message: 'Permanently remove this future booking?', confirmColor: 'red',
-                    onConfirm: async () => {
-                        closeModal();
-                        setIsGlobalLoading(true);
-                        try {
-                            const basePath = `artifacts/${fb.appId}/public/data`;
-                            await fb.db.collection(`${basePath}/futureBookings`).doc(id).delete();
-                        } catch(err) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Delete failed.', confirmColor: 'red', onConfirm: closeModal });
-                        } finally {
-                            setIsGlobalLoading(false);
-                        }
-                    }
-                });
-            };
-            // ------------------------------------------
             
             const handleLoginSubmit = async (e) => {
                 e.preventDefault();
@@ -1634,28 +1408,29 @@
             };
 
             // HELPER: Calculate Price
-            const calculatePrice = (serviceName, durationName) => {
-                if (!serviceName) return '';
+            const calculatePrice = (serviceName, durationName, transport = 0) => {
+                let basePrice = 0;
                 
-                const foundService = servicesList.find(s => s.name === serviceName);
-                if (!foundService) return '';
-
-                // 1. Try to find exact duration price
-                if (durationName && foundService.prices && foundService.prices[durationName]) {
-                    return foundService.prices[durationName];
-                }  
-                
-                // 2. Fallback to base price (if any legacy price exists)
-                if (foundService.price) {
-                    return foundService.price;
+                if (serviceName) {
+                    const foundService = servicesList.find(s => s.name === serviceName);
+                    if (foundService) {
+                        // 1. Try to find exact duration price
+                        if (durationName && foundService.prices && foundService.prices[durationName]) {
+                            basePrice = foundService.prices[durationName];
+                        } 
+                        // 2. Fallback to base price
+                        else if (foundService.price) {
+                            basePrice = foundService.price;
+                        }
+                    }
                 }
-
-                return '';
+                
+                return basePrice + Number(transport);
             };
 
             const handleServiceChange = (serviceName) => {
-                // Calculate price based on this NEW service + EXISTING duration
-                const newPrice = calculatePrice(serviceName, formData.duration);
+                // Calculate price based on this NEW service + EXISTING duration + EXISTING Transport
+                const newPrice = calculatePrice(serviceName, formData.duration, formData.transportFee);
                 
                 setFormData({  
                     ...formData,  
@@ -1665,8 +1440,8 @@
             };
 
             const handleDurationChange = (durationName) => {
-                // Calculate price based on EXISTING service + NEW duration
-                const newPrice = calculatePrice(formData.service, durationName);
+                // Calculate price based on EXISTING service + NEW duration + EXISTING Transport
+                const newPrice = calculatePrice(formData.service, durationName, formData.transportFee);
 
                 setFormData({  
                     ...formData,  
@@ -1674,40 +1449,42 @@
                     amount: newPrice  
                 });
             };
+            
+            const handleTransportChange = (val) => {
+                const transport = parseFloat(val) || 0;
+                // Recalculate total with new transport
+                const newPrice = calculatePrice(formData.service, formData.duration, transport);
+                
+                setFormData({
+                    ...formData,
+                    transportFee: val,
+                    amount: newPrice
+                });
+            };
+            
+            const toggleLocation = (loc) => {
+                let newTransport = formData.transportFee;
+                if (loc === 'spa') {
+                    newTransport = ''; // Reset transport fee if back to Spa
+                }
+                
+                // Recalculate based on change
+                const transportVal = loc === 'spa' ? 0 : (parseFloat(newTransport) || 0);
+                const newPrice = calculatePrice(formData.service, formData.duration, transportVal);
 
-            // UPDATED: Unified submit handler for Booking/Sale/Expense/Future
+                setFormData({
+                    ...formData,
+                    location: loc,
+                    transportFee: newTransport,
+                    amount: newPrice
+                });
+            };
+
+            // UPDATED: Unified submit handler for Booking/Sale/Expense
             const handleSubmit = async (e, typeOverride = null) => {
                 e.preventDefault();
                 const transactionType = typeOverride || formData.type;
-                
-                
                 const transactionBranch = user.currentBranch === 'ALL' ? formData.targetBranch : user.currentBranch;
-                const transactionDate = formData.date;
-
-                // --- NEW: INTELLIGENT COLLECTION DETERMINATION ---
-                let collectionName = 'transactions';
-                let isFutureBooking = false;
-                
-                // Compare the date input (YYYY-MM-DD string)
-                if (transactionDate > todayDate) {
-                    // If date is tomorrow or later, force it into futureBookings
-                    isFutureBooking = true;
-                    collectionName = 'futureBookings';
-                } else if (transactionType === 'expense') {
-                    // Expenses are always transactions
-                    collectionName = 'transactions';
-                } else {
-                    // Today's date or a past date goes to current live transactions (dashboard)
-                    collectionName = 'transactions';
-                }
-                // ----------------------------------------------------
-
-
-                // --- VALIDATION CHECKS ---
-                if (formData.isHomeService && (!formData.transportFee || parseFloat(formData.transportFee) < 0)) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Missing Fee', message: 'Please enter a valid Transportation Fee for Home Service.', onConfirm: closeModal, confirmColor: 'red' });
-                    return;
-                }
 
                 if (user.currentBranch === 'ALL' && !formData.targetBranch) {
                     setModal({ isOpen: true, type: 'alert', title: 'Missing Branch', message: 'Please select a Target Branch.', onConfirm: closeModal, confirmColor: 'red' });
@@ -1720,69 +1497,55 @@
                             return;
                     }
                 } else {
-                    if (!formData.clientName || !formData.amount || !formData.service || !formData.therapist || !formData.date) {
-                        setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please ensure Date, Client Name, Service, Therapist, and Price are all entered.', onConfirm: closeModal, confirmColor: 'red' });
+                    if (!formData.clientName || !formData.amount || !formData.service || !formData.therapist) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please ensure Client Name, Service, Therapist, and Price are all entered.', onConfirm: closeModal, confirmColor: 'red' });
                         return;
                     }
 
-                    // CONFLICT VALIDATION: Check Future Bookings AND Live Transactions
-                    const allBookings = [
-                        ...transactions.filter(t => t.date === transactionDate && t.type !== 'expense'), 
-                        ...futureBookings.filter(b => b.date === transactionDate && b.status === 'pending')
-                    ];
-                    
+                    // VALIDATION: Check for conflicts (Same Therapist at Exact Same Time on Same Day)
+                    // We only check conflicts against records in 'transactions' (Live + Future)
+                    const allBookings = [...transactions, ...offlineQueue];
                     const isConflict = allBookings.some(t =>  
                         t.therapist === formData.therapist &&  
-                        t.time === formData.time
+                        t.time === formData.time &&
+                        (t.bookingDate || formatDate(t.timestamp)) === formData.bookingDate && // Date Check
+                        t.type !== 'expense'
                     );
 
                     if (isConflict) {
-                        setModal({ isOpen: true, type: 'alert', title: 'Booking Conflict', message: `Therapist ${formData.therapist} is already booked at ${formData.time} on ${transactionDate}.`, onConfirm: closeModal, confirmColor: 'red' });
+                        setModal({ isOpen: true, type: 'alert', title: 'Booking Conflict', message: `Therapist ${formData.therapist} is already booked at ${formData.time} on ${formData.bookingDate}.`, onConfirm: closeModal, confirmColor: 'red' });
                         return;
                     }
-                    
-                    // NOTE: We no longer need to restrict live booking date, as date selection automatically routes to FutureBookings.
-                    // The only hard check is if they selected a future date but tried to save it as an expense, which is blocked later.
                 }
                 
                 let amountValue = parseFloat(formData.amount);
                 if (transactionType === 'expense') {
+                    // Expenses must be stored as negative numbers for easy calculation
                     amountValue = -Math.abs(amountValue);
                 }
 
-                // Payload Construction
+                // Payload
                 const transactionPayload = {
-                    clientName: formData.clientName || formData.category,
-                    description: formData.notes,
+                    clientName: formData.clientName || formData.category, 
+                    description: formData.notes, 
                     service: formData.service,
-                    category: formData.category,
+                    category: formData.category, 
                     therapist: formData.therapist,
                     amount: amountValue,
                     duration: formData.duration,
-                    // --- MODIFIED: Ensure correct type/status based on final destination ---
-                    type: isFutureBooking ? 'booking' : transactionType,
-                    status: isFutureBooking ? 'pending' : (transactionType === 'expense' ? 'completed' : (transactionType === 'sale' ? 'completed' : 'pending')),
-                    // ----------------------------------------------------------------------
-                    date: transactionDate,
+                    type: transactionType,
+                    status: transactionType === 'expense' ? 'completed' : (transactionType === 'sale' ? 'completed' : 'pending'),
                     time: formData.time,
+                    bookingDate: formData.bookingDate, // Important new field
                     recordedBy: user.name,
                     branch: transactionBranch,
                     notes: formData.notes.trim(),
-                    isHomeService: formData.isHomeService || false,
-                    transportFee: formData.isHomeService ? (parseFloat(formData.transportFee) || 0) : 0
+                    location: formData.location || 'spa',
+                    transportFee: formData.transportFee || 0
                 };
 
-                // --- EXECUTION ---
-                const basePath = `artifacts/${fb.appId}/public/data`;
-                
-                const successMsg = isFutureBooking 
-                    ? `Future booking saved for ${transactionDate} at ${transactionBranch}.` 
-                    : `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`;
-                
-                const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
-
-                // OFFLINE HANDLING (Only for Live transactions)
-                if (!isOnline && !isFutureBooking) {
+                // OFFLINE HANDLING
+                if (!isOnline) {
                     const newOfflineItem = {
                         ...transactionPayload,
                         localId: Date.now(), // Temp ID
@@ -1790,38 +1553,43 @@
                     };
                     setOfflineQueue(prev => [...prev, newOfflineItem]);
                     
+                    const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
-                        type: 'booking', date: todayDate, time: new Date().toTimeString().slice(0, 5),  
+                        type: 'booking', time: new Date().toTimeString().slice(0, 5),  
                         targetBranch: resetTargetBranch, notes: '', category: '',
-                        isHomeService: false, transportFee: ''
+                        bookingDate: new Date().toISOString().split('T')[0],
+                        location: 'spa', transportFee: ''
                     });
 
                     setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} queued. Will sync when online.`, onConfirm: closeModal, confirmColor: 'orange' });
                     return;
-                } else if (!isOnline && isFutureBooking) {
-                     setModal({ isOpen: true, type: 'alert', title: 'Offline Error', message: 'Cannot save Future Bookings while offline. Try again when connected.', onConfirm: closeModal, confirmColor: 'red' });
-                     return;
                 }
 
                 // ONLINE HANDLING
                 setIsGlobalLoading(true);
                 try {
-                    await fb.db.collection(`${basePath}/${collectionName}`).add({
+                    const basePath = `artifacts/${fb.appId}/public/data`;
+                    await fb.db.collection(`${basePath}/transactions`).add({
                         ...transactionPayload,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
+
+                    const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
                     
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
-                        type: 'booking', date: todayDate, time: new Date().toTimeString().slice(0, 5),
+                        type: 'booking', time: new Date().toTimeString().slice(0, 5),
                         targetBranch: resetTargetBranch, notes: '', category: '',
-                        isHomeService: false, transportFee: ''
+                        bookingDate: new Date().toISOString().split('T')[0],
+                        location: 'spa', transportFee: ''
                     });
                     
-                    setModal({ isOpen: true, type: 'alert', title: isFutureBooking ? 'Future Booking Saved!' : 'Record Saved!', message: successMsg, onConfirm: closeModal, confirmColor: 'logo-green' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Record Saved!', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`, onConfirm: closeModal, confirmColor: 'logo-green' });
 
-                    setView(isFutureBooking ? 'futureBookings' : 'dashboard');
+                    // Set Dashboard date to the booking date so user sees it immediately
+                    setDashboardDate(transactionPayload.bookingDate);
+                    setView('dashboard');
                 } catch (error) {
                     setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to save record. Please check connection.', onConfirm: closeModal, confirmColor: 'red' });
                 } finally {
@@ -1875,12 +1643,16 @@
                 }
                 
                 if (filteredTransactions.length === 0) {
-                    setModal({ isOpen: true, type: 'alert', title: 'No Data', message: 'Nothing to save for this branch.', onConfirm: closeModal, confirmColor: 'logo-green' });
+                    setModal({ isOpen: true, type: 'alert', title: 'No Data', message: 'Nothing to save for this branch on this date.', onConfirm: closeModal, confirmColor: 'logo-green' });
                     return;
                 }
 
+                // Check if we are ending a future date (which is weird, but allowed if user wants to clear mistakes)
+                const isToday = dashboardDate === new Date().toISOString().split('T')[0];
+                const msg = isToday ? "Archive Today's Records?" : `Archive Records for ${dashboardDate}?`;
+
                 setModal({
-                    isOpen: true, type: 'confirm', title: 'Archive & Start New Shift?', message: `This will permanently save and clear all active records for ${user.currentBranch}. The report will be stored in History.`, confirmColor: 'logo-green',
+                    isOpen: true, type: 'confirm', title: 'End Day / Shift', message: `${msg} This will permanently save and clear active records for ${user.currentBranch} on this specific date.`, confirmColor: 'logo-green',
                     onConfirm: async () => {
                         closeModal();
                         setIsGlobalLoading(true);
@@ -1892,9 +1664,10 @@
                             const historyColl = fb.db.collection(`${basePath}/history`);
                             const transColl = fb.db.collection(`${basePath}/transactions`);
 
-                            // 1. ATTEMPT TO ARCHIVE DATA
+                            // 1. ATTEMPT TO ARCHIVE DATA (Only filteredTransactions i.e., current date view)
                             await historyColl.add({
-                                date: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                                date: dashboardDate, // Use the specific date we are viewing
+                                date_formatted: new Date(dashboardDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
                                 timestamp: new Date().toLocaleString(),
                                 timestamp_val: firebase.firestore.FieldValue.serverTimestamp(),
                                 transactions: filteredTransactions,
@@ -1911,7 +1684,7 @@
 
                             // 3. COMPLETE SUCCESS
                             setView('dashboard');  
-                            setModal({ isOpen: true, type: 'alert', title: 'Shift Closed!', message: `Shift transactions successfully archived for ${user.currentBranch}.`, confirmColor: 'logo-green', onConfirm: closeModal });
+                            setModal({ isOpen: true, type: 'alert', title: 'Shift Closed!', message: `Shift transactions successfully archived.`, confirmColor: 'logo-green', onConfirm: closeModal });
 
                         } catch (error) {
                             console.error("End Day Fatal Error:", error);
@@ -2201,11 +1974,6 @@
                         <div className="flex p-1 bg-slate-200/60 rounded-xl mb-6 sticky top-[70px] z-10 backdrop-blur-sm overflow-x-auto">
                             <button onClick={()=>setView('dashboard')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='dashboard'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.LayoutDashboard size={16}/> Daily</button>
                             <button onClick={()=>setView('add')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='add'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.Plus size={16}/> Booking</button>
-                            {/* --- NEW FEATURE: FUTURE BOOKINGS NAVIGATION --- */}
-                            <button onClick={()=>setView('futureBookings')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='futureBookings'?'bg-white text-future-blue-700 shadow-sm':'text-slate-500'}`}>
-                                <Icons.BookOpen size={16}/> Future
-                            </button>
-                            {/* ------------------------------------------------ */}
                             {/* UPDATED: Expense button label */}
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
@@ -2230,6 +1998,37 @@
                         {view === 'dashboard' && (
                             <div className="space-y-6 fade-in">
                                 
+                                {/* DATE SELECTOR - NAVIGATION */}
+                                <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-slate-100">
+                                    <button onClick={() => {
+                                        const d = new Date(dashboardDate);
+                                        d.setDate(d.getDate() - 1);
+                                        setDashboardDate(d.toISOString().split('T')[0]);
+                                    }} className="p-2 text-slate-400 hover:text-logo-green-600"><Icons.ChevronDown className="rotate-90" size={20}/></button>
+                                    
+                                    <div className="text-center">
+                                        <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wide block">Viewing Date</label>
+                                        <input 
+                                            type="date" 
+                                            value={dashboardDate} 
+                                            onChange={(e) => setDashboardDate(e.target.value)} 
+                                            className="font-bold text-lg text-slate-700 bg-transparent text-center focus:outline-none cursor-pointer"
+                                        />
+                                        {dashboardDate > new Date().toISOString().split('T')[0] && (
+                                            <span className="block text-[10px] text-blue-500 font-bold bg-blue-50 rounded-full px-2 py-0.5 mt-1">FUTURE BOOKINGS</span>
+                                        )}
+                                        {dashboardDate === new Date().toISOString().split('T')[0] && (
+                                            <span className="block text-[10px] text-green-500 font-bold bg-green-50 rounded-full px-2 py-0.5 mt-1">LIVE / TODAY</span>
+                                        )}
+                                    </div>
+
+                                    <button onClick={() => {
+                                        const d = new Date(dashboardDate);
+                                        d.setDate(d.getDate() + 1);
+                                        setDashboardDate(d.toISOString().split('T')[0]);
+                                    }} className="p-2 text-slate-400 hover:text-logo-green-600"><Icons.ChevronDown className="-rotate-90" size={20}/></button>
+                                </div>
+
                                 {/* NEW: ALL BRANCH SUMMARY (Owner Admin only) */}
                                 {user.currentBranch === 'ALL' && user.role === 'admin' && branchFinancials && branchFinancials.length > 0 && (  
                                     <div className="bg-white p-4 rounded-xl shadow-lg border border-teal-100 space-y-4">
@@ -2274,15 +2073,6 @@
                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-logo-green-100"><p className="text-slate-500 text-xs font-medium uppercase">Expenses</p><h3 className="text-xl font-bold text-slate-800 mt-1 text-red-600">{formatCurrency(stats.totalExpenses)}</h3></div>
                                     <div className="bg-white p-4 rounded-xl shadow-sm border border-logo-green-100 border-l-[3px] border-logo-green-500"><p className="text-slate-500 text-xs font-medium uppercase flex items-center gap-1"><Icons.Wallet size={12}/> Net Cash</p><h3 className="text-xl font-bold text-logo-green-700 mt-1">{formatCurrency(stats.netCash)}</h3></div>
                                 </div>
-                                {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - DASHBOARD STATS --- */}
-                                {stats.totalTransportFee > 0 && (
-                                    <div className="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100">
-                                        <p className="text-blue-600 text-xs font-medium uppercase flex items-center gap-1"><Icons.Home size={12}/> Collected Transport Fees</p>
-                                        <h3 className="text-xl font-bold text-blue-800 mt-1">{formatCurrency(stats.totalTransportFee)}</h3>
-                                    </div>
-                                )}
-                                {/* ------------------------------------------------------------- */}
-
 
                                 <div className="bg-white p-4 rounded-xl shadow-sm border border-logo-green-100">
                                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><Icons.Trophy size={16} className="text-logo-green-700"/> Payroll Estimate ({user.currentBranch})</h3>
@@ -2327,8 +2117,10 @@
 
                                 <div>
                                     <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-lg font-bold text-logo-green-900 flex gap-2">
-                                            <Icons.LayoutDashboard size={18}/> Live Records ({showMyShift ? 'My Shift' : user.currentBranch})
+                                        <h2 className="text-lg font-bold text-logo-green-900 flex gap-2 items-center">
+                                            <Icons.LayoutDashboard size={18}/> 
+                                            {dashboardDate === new Date().toISOString().split('T')[0] ? "Live Records" : "Future Bookings"} 
+                                            <span className="text-xs font-normal text-slate-500 ml-2">({showMyShift ? 'My Shift' : user.currentBranch})</span>
                                         </h2>
                                         <div className="flex items-center gap-2">
                                             {/* Show "My Shift" toggle for staff */}
@@ -2376,10 +2168,13 @@
                                                     {/* Displaying timestamp date for consistency */}
                                                     <div className="flex gap-2 mb-1 items-center">
                                                         <span className="text-[10px] font-bold bg-slate-100 px-2 rounded text-slate-500">{t.branch}</span>
-                                                        {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - TAG IN DASHBOARD --- */}
-                                                        {t.isHomeService && <span className="text-[10px] font-bold bg-blue-100 px-2 py-0.5 rounded-full text-blue-700 flex items-center gap-1"><Icons.Home size={10}/> HOME</span>}
-                                                        {/* ----------------------------------------------------------------- */}
-                                                        <span className="text-xs font-mono text-slate-400">{t.date} - {t.time}</span>
+                                                        <span className="text-xs font-mono text-slate-400">{t.bookingDate || formatDate(t.timestamp)} - {t.time}</span>
+                                                        {/* Home Service Badge */}
+                                                        {t.location === 'home' && (
+                                                            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 rounded flex items-center gap-1">
+                                                                <Icons.Car size={10}/> Home
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     
                                                     {/* UPDATED: Display clientName or category */}
@@ -2395,12 +2190,10 @@
                                                                 <span>{t.service}</span>
                                                                 {t.duration && <span> • {t.duration}</span>}
                                                                 <span> • {t.therapist}</span>
-                                                                {/* --- NEW FEATURE: HOME SERVICE INTEGRATION - TRANSPORT FEE IN DETAILS --- */}
-                                                                {t.isHomeService && t.transportFee > 0 && <span> • Transport Fee: <span className="font-bold text-blue-600">{formatCurrency(t.transportFee)}</span></span>}
-                                                                {/* ------------------------------------------------------------------------- */}
                                                             </>
                                                         )}
                                                     </div>
+                                                    {/* Note display */}
                                                     {t.notes && t.notes.trim() && t.type !== 'expense' && (
                                                         <div className="mt-2 text-xs bg-slate-50 p-2 rounded border border-slate-200 text-slate-700 flex items-start gap-1">
                                                             <Icons.ClipboardList size={14} className="min-w-[14px] text-logo-green-700 mt-[2px]"/>
@@ -2412,6 +2205,14 @@
                                                 
                                                 <div className="text-right min-w-[80px]">
                                                     <div className={`font-bold text-lg ${t.type === 'expense' ? 'text-red-600' : (t.status==='completed'?'text-logo-green-700':'text-orange-600')}`}>{formatCurrency(t.amount)}</div>
+                                                    
+                                                    {/* Transport Fee Indicator */}
+                                                    {t.transportFee && Number(t.transportFee) > 0 && (
+                                                        <div className="text-[10px] text-slate-400">
+                                                            (Inc. {formatCurrency(t.transportFee)} Trans.)
+                                                        </div>
+                                                    )}
+
                                                     <div className="flex justify-end gap-2 mt-1">
                                                         {t.type !== 'expense' && (
                                                             <button onClick={()=>toggleStatus(t)} className={`p-1.5 rounded-full ${t.status==='completed'?'bg-logo-green-100 text-logo-green-700':'bg-orange-100 text-orange-600'}`}>
@@ -2452,13 +2253,58 @@
                                         <div className="p-3 bg-logo-green-50 rounded-lg text-sm text-logo-green-800 font-medium flex items-center gap-2"><Icons.MapPin size={16}/> Adding to: {user.currentBranch}</div>
                                     )}
 
-                                    {/* --- MODIFIED: Only display Appointment/Sale, date determines Future status --- */}
+                                    {/* Date Picker for Future Booking */}
+                                    <div className="relative">
+                                        <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase">Booking Date</label>
+                                        <Icons.Calendar size={18} className="absolute left-3 top-9 text-slate-400" />
+                                        <input 
+                                            type="date" 
+                                            required
+                                            value={formData.bookingDate}
+                                            onChange={e => setFormData({...formData, bookingDate: e.target.value})}
+                                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-logo-green-700 bg-slate-50 focus:bg-white"
+                                        />
+                                    </div>
+
+                                    {/* Location Toggle (In Spa / Home Service) */}
+                                    <div className="grid grid-cols-2 gap-3 bg-slate-100 p-1.5 rounded-xl">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => toggleLocation('spa')}
+                                            className={`py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${formData.location === 'spa' ? 'bg-white text-logo-green-700 shadow-sm' : 'text-slate-400'}`}
+                                        >
+                                            <Icons.Building2 size={16}/> In Spa
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => toggleLocation('home')}
+                                            className={`py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${formData.location === 'home' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+                                        >
+                                            <Icons.Car size={16}/> Home Service
+                                        </button>
+                                    </div>
+
+                                    {/* Transport Charge Input (Conditional) */}
+                                    {formData.location === 'home' && (
+                                        <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 animate-fadeIn">
+                                            <label className="text-xs font-bold text-blue-700 mb-1 block">Transportation Charge (Not Fixed)</label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-3 text-blue-400 font-bold">P</span>
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="0.00" 
+                                                    value={formData.transportFee}
+                                                    onChange={e => handleTransportChange(e.target.value)}
+                                                    className="w-full pl-8 pr-4 py-2 rounded-lg border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='booking'?'border-logo-green-700 bg-logo-green-50/50':'border-slate-100'}`}><input type="radio" name="type" value="booking" checked={formData.type==='booking'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.Calendar/><span className="text-sm font-bold">Appointment</span></label>
                                         <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='sale'?'border-teal-600 bg-teal-50/50':'border-slate-100'}`}><input type="radio" name="type" value="sale" checked={formData.type==='sale'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.DollarSign/><span className="text-sm font-bold">Direct Pay</span></label>
                                     </div>
-                                    {/* -------------------------------------------------------------------------------- */}
-
                                     <input required placeholder="Client Name*" value={formData.clientName} onChange={e=>setFormData({...formData, clientName:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     
                                     <div className="space-y-4">
@@ -2480,33 +2326,7 @@
                                             {therapistsList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                                         </select>
                                     </div>
-
-                                    {/* --- HOME SERVICE TOGGLE & INPUT --- */}
-                                    <div className="bg-slate-50 p-3 rounded-xl border space-y-3 transition-all">
-                                        <label className="flex items-center justify-between cursor-pointer">
-                                            <div className="flex items-center gap-2">
-                                                <Icons.Home size={20} className={formData.isHomeService ? 'text-logo-green-600' : 'text-slate-400'}/>
-                                                <span className="font-bold text-sm">Home Service (Additional Fee)</span>
-                                            </div>
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.isHomeService}
-                                                onChange={(e) => setFormData({...formData, isHomeService: e.target.checked, transportFee: ''})}
-                                                className="w-4 h-4 text-logo-green-600 bg-slate-100 border-gray-300 rounded focus:ring-logo-green-500"
-                                            />
-                                        </label>
-                                        {formData.isHomeService && (
-                                            <input required={formData.isHomeService}  
-                                                type="number" step="0.01"  
-                                                placeholder="Transportation Fee (P)*"  
-                                                value={formData.transportFee}  
-                                                onChange={e=>setFormData({...formData, transportFee:e.target.value})}  
-                                                className="w-full p-3 border rounded-xl bg-white"
-                                            />
-                                        )}
-                                    </div>
-                                    {/* ------------------------------------------------------------- */}
-
+                                    
                                     {/* Service Notes Textarea */}
                                     <textarea  
                                         placeholder="Service Notes (e.g., Hard pressure, No oil on back, Client prefers quiet)"  
@@ -2520,46 +2340,76 @@
                                         {/* Price is now editable and required, auto-filled by service selection */}
                                         <input required  
                                             type="number" step="0.01"  
-                                            placeholder="Service Price (P)*"  
+                                            placeholder="Total Price (P)*"  
                                             value={formData.amount}  
                                             onChange={e=>setFormData({...formData, amount:e.target.value})}  
-                                            className="w-full p-3 border rounded-xl bg-slate-50"
+                                            className="w-full p-3 border rounded-xl bg-slate-50 font-bold text-lg text-logo-green-800"
                                         />
-                                        {/* --- MODIFIED: DATE INPUT LOGIC --- */}
-                                        <input 
-                                            required 
-                                            type="date" 
-                                            min={formData.type === 'booking' || formData.type === 'sale' ? null : todayDate} // Allows past dates for late logging
-                                            value={formData.date} 
-                                            onChange={e=>setFormData({...formData, date:e.target.value})} 
-                                            className={`w-full p-3 border rounded-xl bg-slate-50 ${formData.date > todayDate ? 'border-future-blue-500 text-future-blue-700' : 'text-slate-800'}`}
-                                        />
-                                        <input required type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
-                                        {/* ---------------------------------- */}
+                                        <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     </div>
-                                    <button 
-                                        type="submit" 
-                                        className={`w-full text-white font-bold py-4 rounded-xl shadow-lg mt-2 ${formData.date > todayDate ? 'bg-future-blue-700 hover:bg-future-blue-800' : 'bg-logo-green-700'}`}
-                                    >
-                                        {formData.date > todayDate ? 'Save as Future Booking' : 'Save Live Transaction'}
-                                    </button>
+                                    <button className="w-full bg-logo-green-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2">Save Booking</button>
                                 </form>
                             </div>
                         )}
+                        
+                        {/* NEW: Expense Tracking View */}
+                        {view === 'expense' && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 fade-in">
+                                {/* UPDATED: Header label */}
+                                <h2 className="text-xl font-bold text-red-700 mb-6 flex items-center gap-2"><Icons.MinusCircle size={24}/> Log Expense</h2>
+                                <form onSubmit={(e) => handleSubmit(e, 'expense')} className="space-y-5">
+                                    
+                                    {user.currentBranch === 'ALL' ? (
+                                        <div className="relative">
+                                            <Icons.MapPin size={18} className="absolute left-3 top-3.5 text-slate-400" />
+                                            <select  
+                                                required  
+                                                value={formData.targetBranch}  
+                                                onChange={(e)=>setFormData({...formData, targetBranch:e.target.value})}  
+                                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-700 bg-slate-50 focus:bg-white appearance-none text-slate-600 font-bold border-red-400"
+                                            >
+                                                <option value="" disabled>SELECT BRANCH AFFECTED*</option>
+                                                {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                                            </select>
+                                            <Icons.ChevronDown size={16} className="absolute right-3 top-4 text-slate-400 pointer-events-none"/>
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 bg-red-50 rounded-lg text-sm text-red-800 font-medium flex items-center gap-2"><Icons.MapPin size={16}/> Logging for: {user.currentBranch}</div>
+                                    )}
 
-                        {view === 'futureBookings' && (
-                            <FutureBookingsView 
-                                futureBookings={futureBookings}
-                                therapistsList={therapistsList}
-                                user={user}
-                                fb={fb}
-                                setModal={setModal}
-                                closeModal={closeModal}
-                                formatCurrency={formatCurrency}
-                                isGlobalLoading={isGlobalLoading}
-                                setIsGlobalLoading={setIsGlobalLoading}
-                                requestDeleteFuture={requestDeleteFuture}
-                            />
+                                    <div className="flex gap-2">
+                                        <select required value={formData.category} onChange={e=>setFormData({...formData, category:e.target.value})} className="flex-1 p-3 border rounded-xl bg-slate-50 appearance-none">
+                                            <option value="" disabled>Select Category*</option>
+                                            {/* UPDATED: Removed "Petty Cash" from category descriptions */}
+                                            <option value="Supplies">Supplies (Oil, Linens, etc.)</option>
+                                            <option value="Maintenance">Maintenance/Repair</option>
+                                            <option value="Utilities">Utilities Payment (Partial)</option>
+                                            <option value="Food/Beverage">Staff Food/Beverage</option>
+                                            <option value="Other">Other Expense</option>
+                                        </select>
+                                        <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-[120px] p-3 border rounded-xl bg-slate-50"/>
+                                    </div>
+                                    
+                                    <input required  
+                                        type="number" step="0.01"  
+                                        min="0.01"
+                                        placeholder="Amount Spent (P)*"  
+                                        value={formData.amount}  
+                                        onChange={e=>setFormData({...formData, amount:e.target.value})}  
+                                        className="w-full p-3 border rounded-xl bg-slate-50 border-red-300 font-bold"
+                                    />
+                                    
+                                    <textarea  
+                                        required
+                                        placeholder="Description / Reason (e.g. Bought 1 bottle of Isopropyl Alcohol)"  
+                                        rows="3"
+                                        value={formData.notes}  
+                                        onChange={e=>setFormData({...formData, notes:e.target.value})}  
+                                        className="w-full p-3 border rounded-xl bg-slate-50 resize-none"
+                                    />
+                                    <button className="w-full bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2 hover:bg-red-800">Submit Expense</button>
+                                </form>
+                            </div>
                         )}
 
                         {view === 'profile' && (
@@ -2730,7 +2580,7 @@
                                     filteredHistory.map(h => (
                                         <div key={h.id} className="bg-white rounded-xl shadow-sm border overflow-hidden">
                                             <div onClick={()=>setExpandedHistoryId(expandedHistoryId===h.id?null:h.id)} className="p-4 flex justify-between items-center cursor-pointer">
-                                                <div><h3 className="font-bold text-slate-800">{h.date}</h3><p className="text-xs text-slate-400">{h.branch || 'Unknown'} • Closed by {h.closedBy}</p></div>
+                                                <div><h3 className="font-bold text-slate-800">{h.date_formatted || h.date}</h3><p className="text-xs text-slate-400">{h.branch || 'Unknown'} • Closed by {h.closedBy}</p></div>
                                                 <div className="flex items-center gap-4">
                                                     <button onClick={(e)=>{e.stopPropagation();downloadCSV(h)}} title="Download CSV"><Icons.Download size={20} className="text-slate-400 hover:text-logo-green-700"/></button>
                                                     <button onClick={(e)=>{e.stopPropagation();handleDeleteHistory(h.id, h.date)}} title="Delete Report"><Icons.Trash2 size={20} className="text-slate-400 hover:text-red-500"/></button>
