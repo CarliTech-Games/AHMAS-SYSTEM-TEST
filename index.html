@@ -39,6 +39,8 @@
                         'future-blue': {
                             50: '#EEF6FF',
                             700: '#006FFF',
+                            800: '#005CE6',
+                            900: '#004CBE',
                         }
                     }
                 }
@@ -566,7 +568,7 @@
 
 
         // --- NEW FEATURE: FUTURE BOOKINGS VIEW COMPONENT ---
-        const FutureBookingsView = ({ futureBookings, therapistsList, user, fb, setModal, closeModal, formatCurrency, isGlobalLoading, setIsGlobalLoading }) => {
+        const FutureBookingsView = ({ futureBookings, therapistsList, user, fb, setModal, closeModal, formatCurrency, isGlobalLoading, setIsGlobalLoading, requestDeleteFuture }) => {
             const [expandedId, setExpandedId] = useState(null);
             const [isEditing, setIsEditing] = useState(false);
             const [editData, setEditData] = useState(null);
@@ -607,6 +609,21 @@
             const handleUpdateBooking = async (e) => {
                 e.preventDefault();
                 if (!editData) return;
+                
+                // --- CONFLICT CHECK ---
+                const isConflict = filteredFutureBookings.some(b => 
+                    b.therapist === editData.therapist &&
+                    b.time === editData.time &&
+                    b.date === editData.date &&
+                    b.id !== editData.id &&
+                    b.status === 'pending'
+                );
+
+                if (isConflict) {
+                    setModal({ isOpen: true, type: 'alert', title: 'Booking Conflict', message: `Therapist ${editData.therapist} is already booked at ${editData.time} on ${editData.date}.`, onConfirm: closeModal, confirmColor: 'red' });
+                    return;
+                }
+                // -----------------------
 
                 setIsGlobalLoading(true);
                 try {
@@ -631,9 +648,9 @@
             };
 
             const statusStyles = {
-                pending: { bg: 'bg-future-blue-50', text: 'text-future-blue-700', icon: 'BookOpen' },
-                cancelled: { bg: 'bg-red-100', text: 'text-red-700', icon: 'X' },
-                noshow: { bg: 'bg-orange-100', text: 'text-orange-700', icon: 'AlertTriangle' },
+                pending: { bg: 'bg-future-blue-50', text: 'text-future-blue-700', icon: 'BookOpen', border: 'border-future-blue-700' },
+                cancelled: { bg: 'bg-red-50', text: 'text-red-700', icon: 'X', border: 'border-red-700' },
+                noshow: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'AlertTriangle', border: 'border-orange-700' },
             };
 
             return (
@@ -647,7 +664,7 @@
                             {filteredFutureBookings.map(b => {
                                 const styles = statusStyles[b.status] || statusStyles.pending;
                                 return (
-                                    <div key={b.id} className={`bg-white p-4 rounded-xl border-l-[6px] border-l-future-blue-700 shadow-sm ${styles.bg}`}>
+                                    <div key={b.id} className={`bg-white p-4 rounded-xl border-l-[6px] shadow-sm ${styles.border} ${styles.bg}`}>
                                         <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedId(expandedId === b.id ? null : b.id)}>
                                             <div className="flex-1 pr-4">
                                                 <div className="flex gap-2 mb-1 items-center">
@@ -670,44 +687,28 @@
                                         </div>
                                         {expandedId === b.id && (
                                             <div className="mt-4 pt-4 border-t border-slate-200 space-y-3">
-                                                {isEditing && editData?.id === b.id ? (
-                                                    // Edit Form
-                                                    <form onSubmit={handleUpdateBooking} className="space-y-2">
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <input type="date" required value={editData.date} onChange={e => setEditData({ ...editData, date: e.target.value })} className="p-2 border rounded text-sm bg-white"/>
-                                                            <input type="time" required value={editData.time} onChange={e => setEditData({ ...editData, time: e.target.value })} className="p-2 border rounded text-sm bg-white"/>
-                                                        </div>
-                                                        <select required value={editData.therapist} onChange={e => setEditData({ ...editData, therapist: e.target.value })} className="w-full p-2 border rounded text-sm bg-white appearance-none">
-                                                            <option value="" disabled>Change Therapist</option>
-                                                            {therapistsList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                                                        </select>
-                                                        <textarea placeholder="Update Notes" value={editData.notes} onChange={e => setEditData({ ...editData, notes: e.target.value })} className="w-full p-2 border rounded text-sm bg-white resize-none" rows="2"></textarea>
-                                                        <div className="flex gap-2 justify-end">
-                                                            <button type="button" onClick={() => setIsEditing(false)} className="px-3 py-1.5 text-slate-500 rounded hover:bg-slate-100">Cancel</button>
-                                                            <button type="submit" className="px-3 py-1.5 text-white bg-logo-green-600 rounded">Save Changes</button>
-                                                        </div>
-                                                    </form>
-                                                ) : (
-                                                    // View Details & Actions
-                                                    <>
-                                                        <p className="text-xs text-slate-700"><span className="font-bold">Service:</span> {b.service} ({b.duration})</p>
-                                                        {b.isHomeService && <p className="text-xs text-blue-700 font-bold"><Icons.Home size={12} className="inline mr-1"/> Home Service: {formatCurrency(b.transportFee)}</p>}
-                                                        {b.notes && b.notes.trim() && <p className="text-xs text-slate-500 italic mt-2">Notes: {b.notes}</p>}
-                                                        <div className="flex gap-2 pt-2 border-t mt-3">
-                                                            <button onClick={() => startEdit(b)} className="px-3 py-1.5 text-xs text-blue-500 bg-blue-50 rounded hover:bg-blue-100 flex items-center gap-1"><Icons.Pencil size={12}/> Edit</button>
-                                                            {b.status === 'pending' && (
-                                                                <>
-                                                                    <button onClick={() => handleStatusChange(b, 'cancelled')} className="px-3 py-1.5 text-xs text-red-500 bg-red-50 rounded hover:bg-red-100 flex items-center gap-1"><Icons.X size={12}/> Cancel</button>
-                                                                    <button onClick={() => handleStatusChange(b, 'noshow')} className="px-3 py-1.5 text-xs text-orange-500 bg-orange-50 rounded hover:bg-orange-100 flex items-center gap-1"><Icons.AlertTriangle size={12}/> No Show</button>
-                                                                    {/* Admin can delete cancelled/noshow permanently */}
-                                                                    {(b.status === 'cancelled' || b.status === 'noshow') && user.role === 'admin' && (
-                                                                        <button onClick={() => requestDeleteFuture(b.id)} className="px-3 py-1.5 text-xs text-red-500 bg-red-50 rounded hover:bg-red-100 flex items-center gap-1 ml-auto"><Icons.Trash2 size={12}/></button>
-                                                                    )}
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </>
-                                                )}
+                                                
+                                                <p className="text-xs text-slate-700"><span className="font-bold">Service:</span> {b.service} ({b.duration})</p>
+                                                {b.isHomeService && <p className="text-xs text-blue-700 font-bold"><Icons.Home size={12} className="inline mr-1"/> Home Service: {formatCurrency(b.transportFee)}</p>}
+                                                {b.notes && b.notes.trim() && <p className="text-xs text-slate-500 italic mt-2">Notes: {b.notes}</p>}
+                                                
+                                                <div className="flex gap-2 pt-2 border-t mt-3">
+                                                    
+                                                    {b.status === 'pending' && !isEditing && (
+                                                        <button onClick={() => startEdit(b)} className="px-3 py-1.5 text-xs text-blue-500 bg-blue-50 rounded hover:bg-blue-100 flex items-center gap-1"><Icons.Pencil size={12}/> Edit Details</button>
+                                                    )}
+                                                    
+                                                    {b.status === 'pending' && (
+                                                        <>
+                                                            <button onClick={() => handleStatusChange(b, 'cancelled')} className="px-3 py-1.5 text-xs text-red-500 bg-red-50 rounded hover:bg-red-100 flex items-center gap-1"><Icons.X size={12}/> Cancel</button>
+                                                            <button onClick={() => handleStatusChange(b, 'noshow')} className="px-3 py-1.5 text-xs text-orange-500 bg-orange-50 rounded hover:bg-orange-100 flex items-center gap-1"><Icons.AlertTriangle size={12}/> No Show</button>
+                                                        </>
+                                                    )}
+                                                    
+                                                    {user.role === 'admin' && (b.status === 'cancelled' || b.status === 'noshow') && (
+                                                        <button onClick={() => requestDeleteFuture(b.id)} className="px-3 py-1.5 text-xs text-red-500 bg-red-50 rounded hover:bg-red-100 flex items-center gap-1 ml-auto"><Icons.Trash2 size={12}/> Delete</button>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -716,21 +717,21 @@
                         </div>
                     )}
 
-                    {/* Simple modal wrapper for nested modals */}
-                    {isEditing && (
+                    {/* Simple modal wrapper for nested modals (Edit Booking) */}
+                    {isEditing && editData && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60">
                             <div className="bg-white rounded-xl p-6 w-full max-w-sm">
                                 <h3 className="font-bold text-lg mb-4">Edit Future Booking</h3>
                                 <form onSubmit={handleUpdateBooking} className="space-y-4">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <input type="date" required value={editData?.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} className="p-3 border rounded-lg text-sm bg-slate-50"/>
-                                        <input type="time" required value={editData?.time || ''} onChange={e => setEditData({ ...editData, time: e.target.value })} className="p-3 border rounded-lg text-sm bg-slate-50"/>
+                                        <input type="date" required value={editData.date || ''} onChange={e => setEditData({ ...editData, date: e.target.value })} className="p-3 border rounded-lg text-sm bg-slate-50"/>
+                                        <input type="time" required value={editData.time || ''} onChange={e => setEditData({ ...editData, time: e.target.value })} className="p-3 border rounded-lg text-sm bg-slate-50"/>
                                     </div>
-                                    <select required value={editData?.therapist || ''} onChange={e => setEditData({ ...editData, therapist: e.target.value })} className="w-full p-3 border rounded-lg text-sm bg-slate-50 appearance-none">
+                                    <select required value={editData.therapist || ''} onChange={e => setEditData({ ...editData, therapist: e.target.value })} className="w-full p-3 border rounded-lg text-sm bg-slate-50 appearance-none">
                                         <option value="" disabled>Change Therapist</option>
                                         {therapistsList.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                                     </select>
-                                    <textarea placeholder="Update Notes" value={editData?.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} className="w-full p-3 border rounded-lg text-sm bg-slate-50 resize-none" rows="2"></textarea>
+                                    <textarea placeholder="Update Notes" value={editData.notes || ''} onChange={e => setEditData({ ...editData, notes: e.target.value })} className="w-full p-3 border rounded-lg text-sm bg-slate-50 resize-none" rows="2"></textarea>
                                     <div className="flex gap-2 justify-end pt-2">
                                         <button type="button" onClick={() => setIsEditing(false)} className="px-4 py-2 text-slate-500 rounded hover:bg-slate-100">Cancel</button>
                                         <button type="submit" className="px-4 py-2 text-white bg-logo-green-600 rounded">Save Changes</button>
@@ -1013,7 +1014,7 @@
                 
                 // --- NEW FEATURE: FUTURE BOOKINGS LISTENER ---
                 let unsubFutureBookings = () => {};
-                if (view === 'futureBookings') {
+                if (view === 'futureBookings' || view === 'add') { // Keep listener active in 'add' view for conflict check
                     unsubFutureBookings = getCollection('futureBookings')
                         .onSnapshot((snapshot) => {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1679,11 +1680,28 @@
                 e.preventDefault();
                 const transactionType = typeOverride || formData.type;
                 
-                // Determine if this is a Future Booking (different Firestore collection)
-                const isFutureBooking = transactionType === 'futureBooking';
                 
                 const transactionBranch = user.currentBranch === 'ALL' ? formData.targetBranch : user.currentBranch;
                 const transactionDate = formData.date;
+
+                // --- NEW: INTELLIGENT COLLECTION DETERMINATION ---
+                let collectionName = 'transactions';
+                let isFutureBooking = false;
+                
+                // Compare the date input (YYYY-MM-DD string)
+                if (transactionDate > todayDate) {
+                    // If date is tomorrow or later, force it into futureBookings
+                    isFutureBooking = true;
+                    collectionName = 'futureBookings';
+                } else if (transactionType === 'expense') {
+                    // Expenses are always transactions
+                    collectionName = 'transactions';
+                } else {
+                    // Today's date or a past date goes to current live transactions (dashboard)
+                    collectionName = 'transactions';
+                }
+                // ----------------------------------------------------
+
 
                 // --- VALIDATION CHECKS ---
                 if (formData.isHomeService && (!formData.transportFee || parseFloat(formData.transportFee) < 0)) {
@@ -1708,8 +1726,10 @@
                     }
 
                     // CONFLICT VALIDATION: Check Future Bookings AND Live Transactions
-                    const allBookings = [...transactions.filter(t => t.date === transactionDate && t.type !== 'expense'), 
-                                         ...futureBookings.filter(b => b.date === transactionDate && b.status === 'pending')];
+                    const allBookings = [
+                        ...transactions.filter(t => t.date === transactionDate && t.type !== 'expense'), 
+                        ...futureBookings.filter(b => b.date === transactionDate && b.status === 'pending')
+                    ];
                     
                     const isConflict = allBookings.some(t =>  
                         t.therapist === formData.therapist &&  
@@ -1721,10 +1741,8 @@
                         return;
                     }
                     
-                    if (!isFutureBooking && new Date(transactionDate).toDateString() !== new Date(todayDate).toDateString()) {
-                        setModal({ isOpen: true, type: 'alert', title: 'Date Error', message: `Live booking/sale must be for today (${todayDate}). Use the 'Future Booking' feature for other dates.`, onConfirm: closeModal, confirmColor: 'red' });
-                        return;
-                    }
+                    // NOTE: We no longer need to restrict live booking date, as date selection automatically routes to FutureBookings.
+                    // The only hard check is if they selected a future date but tried to save it as an expense, which is blocked later.
                 }
                 
                 let amountValue = parseFloat(formData.amount);
@@ -1741,9 +1759,11 @@
                     therapist: formData.therapist,
                     amount: amountValue,
                     duration: formData.duration,
-                    type: isFutureBooking ? 'booking' : transactionType, // Store as 'booking' in futureBookings collection
+                    // --- MODIFIED: Ensure correct type/status based on final destination ---
+                    type: isFutureBooking ? 'booking' : transactionType,
                     status: isFutureBooking ? 'pending' : (transactionType === 'expense' ? 'completed' : (transactionType === 'sale' ? 'completed' : 'pending')),
-                    date: transactionDate, // NEW: Include Date field
+                    // ----------------------------------------------------------------------
+                    date: transactionDate,
                     time: formData.time,
                     recordedBy: user.name,
                     branch: transactionBranch,
@@ -1754,8 +1774,10 @@
 
                 // --- EXECUTION ---
                 const basePath = `artifacts/${fb.appId}/public/data`;
-                const collectionName = isFutureBooking ? 'futureBookings' : 'transactions';
-                const successMsg = isFutureBooking ? `Future booking saved for ${transactionDate} at ${transactionBranch}.` : `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`;
+                
+                const successMsg = isFutureBooking 
+                    ? `Future booking saved for ${transactionDate} at ${transactionBranch}.` 
+                    : `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`;
                 
                 const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
 
@@ -2430,13 +2452,12 @@
                                         <div className="p-3 bg-logo-green-50 rounded-lg text-sm text-logo-green-800 font-medium flex items-center gap-2"><Icons.MapPin size={16}/> Adding to: {user.currentBranch}</div>
                                     )}
 
-                                    {/* --- NEW FEATURE: FUTURE BOOKINGS - TYPE SELECTION --- */}
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='booking'?'border-logo-green-700 bg-logo-green-50/50':'border-slate-100'}`}><input type="radio" name="type" value="booking" checked={formData.type==='booking'} onChange={(e)=>setFormData({...formData, type:e.target.value, date: todayDate})} className="hidden"/><Icons.Calendar/><span className="text-sm font-bold">Appointment</span></label>
-                                        <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='sale'?'border-teal-600 bg-teal-50/50':'border-slate-100'}`}><input type="radio" name="type" value="sale" checked={formData.type==='sale'} onChange={(e)=>setFormData({...formData, type:e.target.value, date: todayDate})} className="hidden"/><Icons.DollarSign/><span className="text-sm font-bold">Direct Pay</span></label>
-                                        <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='futureBooking'?'border-future-blue-700 bg-future-blue-50/50':'border-slate-100'}`}><input type="radio" name="type" value="futureBooking" checked={formData.type==='futureBooking'} onChange={(e)=>setFormData({...formData, type:e.target.value, date: ''})} className="hidden"/><Icons.BookOpen/><span className="text-sm font-bold">Future</span></label>
+                                    {/* --- MODIFIED: Only display Appointment/Sale, date determines Future status --- */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='booking'?'border-logo-green-700 bg-logo-green-50/50':'border-slate-100'}`}><input type="radio" name="type" value="booking" checked={formData.type==='booking'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.Calendar/><span className="text-sm font-bold">Appointment</span></label>
+                                        <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='sale'?'border-teal-600 bg-teal-50/50':'border-slate-100'}`}><input type="radio" name="type" value="sale" checked={formData.type==='sale'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.DollarSign/><span className="text-sm font-bold">Direct Pay</span></label>
                                     </div>
-                                    {/* ------------------------------------------------------------- */}
+                                    {/* -------------------------------------------------------------------------------- */}
 
                                     <input required placeholder="Client Name*" value={formData.clientName} onChange={e=>setFormData({...formData, clientName:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     
@@ -2504,77 +2525,24 @@
                                             onChange={e=>setFormData({...formData, amount:e.target.value})}  
                                             className="w-full p-3 border rounded-xl bg-slate-50"
                                         />
-                                        {/* --- NEW FEATURE: FUTURE BOOKINGS - DATE/TIME INPUTS --- */}
-                                        <input required={formData.type === 'futureBooking'} type="date" min={todayDate} value={formData.date} onChange={e=>setFormData({...formData, date:e.target.value})} className={`w-full p-3 border rounded-xl bg-slate-50 ${formData.type === 'futureBooking' ? 'border-future-blue-500' : ''}`}/>
+                                        {/* --- MODIFIED: DATE INPUT LOGIC --- */}
+                                        <input 
+                                            required 
+                                            type="date" 
+                                            min={formData.type === 'booking' || formData.type === 'sale' ? null : todayDate} // Allows past dates for late logging
+                                            value={formData.date} 
+                                            onChange={e=>setFormData({...formData, date:e.target.value})} 
+                                            className={`w-full p-3 border rounded-xl bg-slate-50 ${formData.date > todayDate ? 'border-future-blue-500 text-future-blue-700' : 'text-slate-800'}`}
+                                        />
                                         <input required type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
-                                        {/* ------------------------------------------------------- */}
+                                        {/* ---------------------------------- */}
                                     </div>
                                     <button 
                                         type="submit" 
-                                        className={`w-full text-white font-bold py-4 rounded-xl shadow-lg mt-2 ${formData.type === 'futureBooking' ? 'bg-future-blue-700 hover:bg-future-blue-800' : 'bg-logo-green-700'}`}
+                                        className={`w-full text-white font-bold py-4 rounded-xl shadow-lg mt-2 ${formData.date > todayDate ? 'bg-future-blue-700 hover:bg-future-blue-800' : 'bg-logo-green-700'}`}
                                     >
-                                        {formData.type === 'futureBooking' ? 'Save Future Booking' : 'Save Live Booking'}
+                                        {formData.date > todayDate ? 'Save as Future Booking' : 'Save Live Transaction'}
                                     </button>
-                                </form>
-                            </div>
-                        )}
-                        
-                        {/* NEW: Expense Tracking View */}
-                        {view === 'expense' && (
-                            <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 fade-in">
-                                {/* UPDATED: Header label */}
-                                <h2 className="text-xl font-bold text-red-700 mb-6 flex items-center gap-2"><Icons.MinusCircle size={24}/> Log Expense</h2>
-                                <form onSubmit={(e) => handleSubmit(e, 'expense')} className="space-y-5">
-                                    
-                                    {user.currentBranch === 'ALL' ? (
-                                        <div className="relative">
-                                            <Icons.MapPin size={18} className="absolute left-3 top-3.5 text-slate-400" />
-                                            <select  
-                                                required  
-                                                value={formData.targetBranch}  
-                                                onChange={(e)=>setFormData({...formData, targetBranch:e.target.value})}  
-                                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-700 bg-slate-50 focus:bg-white appearance-none text-slate-600 font-bold border-red-400"
-                                            >
-                                                <option value="" disabled>SELECT BRANCH AFFECTED*</option>
-                                                {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                                            </select>
-                                            <Icons.ChevronDown size={16} className="absolute right-3 top-4 text-slate-400 pointer-events-none"/>
-                                        </div>
-                                    ) : (
-                                        <div className="p-3 bg-red-50 rounded-lg text-sm text-red-800 font-medium flex items-center gap-2"><Icons.MapPin size={16}/> Logging for: {user.currentBranch}</div>
-                                    )}
-
-                                    <div className="flex gap-2">
-                                        <select required value={formData.category} onChange={e=>setFormData({...formData, category:e.target.value})} className="flex-1 p-3 border rounded-xl bg-slate-50 appearance-none">
-                                            <option value="" disabled>Select Category*</option>
-                                            {/* UPDATED: Removed "Petty Cash" from category descriptions */}
-                                            <option value="Supplies">Supplies (Oil, Linens, etc.)</option>
-                                            <option value="Maintenance">Maintenance/Repair</option>
-                                            <option value="Utilities">Utilities Payment (Partial)</option>
-                                            <option value="Food/Beverage">Staff Food/Beverage</option>
-                                            <option value="Other">Other Expense</option>
-                                        </select>
-                                        <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-[120px] p-3 border rounded-xl bg-slate-50"/>
-                                    </div>
-                                    
-                                    <input required  
-                                        type="number" step="0.01"  
-                                        min="0.01"
-                                        placeholder="Amount Spent (P)*"  
-                                        value={formData.amount}  
-                                        onChange={e=>setFormData({...formData, amount:e.target.value})}  
-                                        className="w-full p-3 border rounded-xl bg-slate-50 border-red-300 font-bold"
-                                    />
-                                    
-                                    <textarea  
-                                        required
-                                        placeholder="Description / Reason (e.g. Bought 1 bottle of Isopropyl Alcohol)"  
-                                        rows="3"
-                                        value={formData.notes}  
-                                        onChange={e=>setFormData({...formData, notes:e.target.value})}  
-                                        className="w-full p-3 border rounded-xl bg-slate-50 resize-none"
-                                    />
-                                    <button className="w-full bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2 hover:bg-red-800">Submit Expense</button>
                                 </form>
                             </div>
                         )}
@@ -2590,6 +2558,7 @@
                                 formatCurrency={formatCurrency}
                                 isGlobalLoading={isGlobalLoading}
                                 setIsGlobalLoading={setIsGlobalLoading}
+                                requestDeleteFuture={requestDeleteFuture}
                             />
                         )}
 
