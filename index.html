@@ -19,7 +19,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Custom Tailwind Configuration to use the Logo's Primary Green (#008000)
         tailwind.config = {
@@ -61,6 +62,9 @@
             border-width: 5px;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Map Container */
+        #map-container { height: 100%; width: 100%; z-index: 1; min-height: 500px; }
+        .custom-div-icon { background: transparent; border: none; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -169,7 +173,8 @@
             CreditCard: (p) => <Icon name="credit-card" {...p} />, // ADDED: Card
             Smartphone: (p) => <Icon name="smartphone" {...p} />, // ADDED: GCash/Phone
             Banknote: (p) => <Icon name="banknote" {...p} />, // ADDED: Cash
-            Landmark: (p) => <Icon name="landmark" {...p} /> // ADDED: Bank
+            Landmark: (p) => <Icon name="landmark" {...p} />, // ADDED: Bank
+            Map: (p) => <Icon name="map" {...p} />
         };
 
         // --- SECURITY HELPER: Hashing Function ---
@@ -216,7 +221,79 @@
             </div>
         );
 
+// --- LIVE MAP COMPONENT ---
+        const LiveMap = ({ activeDrivers }) => {
+            const mapRef = useRef(null);
+            const mapInstanceRef = useRef(null);
+            const markersRef = useRef({});
 
+            useEffect(() => {
+                if (!mapRef.current) return;
+
+                // Initialize Map (Center on Cebu City)
+                if (!mapInstanceRef.current) {
+                    // L is the global variable from the Leaflet script imported earlier
+                    mapInstanceRef.current = L.map(mapRef.current).setView([10.3157, 123.8854], 12); 
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(mapInstanceRef.current);
+                }
+
+                const map = mapInstanceRef.current;
+
+                // Custom Icon
+                const carIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background-color:#008000;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5); position:relative;">
+                            <div style="position:absolute; top:-25px; left:-50px; width:116px; text-align:center; font-weight:bold; font-size:10px; color:#006600; text-shadow:0 0 2px white; background: rgba(255,255,255,0.8); border-radius: 4px; padding: 2px;">Driver</div>
+                           </div>`,
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                });
+
+                // Update Markers
+                activeDrivers.forEach(driver => {
+                    if (driver.location && driver.location.lat && driver.location.lng) {
+                        const { lat, lng } = driver.location;
+                        const lastUpdate = driver.lastUpdated?.seconds ? driver.lastUpdated.seconds * 1000 : Date.now();
+                        const isStale = (Date.now() - lastUpdate) > 300000; 
+
+                        const popupContent = `
+                            <div style="text-align:center; min-width: 100px;">
+                                <h3 style="font-weight:bold; color:#333; margin:0;">${driver.name}</h3>
+                                <div style="font-size:10px; color:${isStale?'red':'green'}; margin-top:4px;">
+                                    ${isStale ? '⚠️ Signal Lost' : '🟢 Signal Active'}
+                                </div>
+                                <div style="font-size:9px; color:#999;">
+                                    Speed: ${Math.round(driver.speed || 0)} m/s
+                                </div>
+                            </div>
+                        `;
+
+                        if (markersRef.current[driver.id]) {
+                            markersRef.current[driver.id].setLatLng([lat, lng]);
+                            markersRef.current[driver.id].setPopupContent(popupContent);
+                        } else {
+                            const marker = L.marker([lat, lng], { icon: carIcon }).addTo(map);
+                            marker.bindPopup(popupContent);
+                            markersRef.current[driver.id] = marker;
+                        }
+                    }
+                });
+
+                // Cleanup
+                Object.keys(markersRef.current).forEach(id => {
+                    if (!activeDrivers.find(d => d.id === id)) {
+                        map.removeLayer(markersRef.current[id]);
+                        delete markersRef.current[id];
+                    }
+                });
+                // Fix map sizing glitch on tab switch
+                setTimeout(() => { map.invalidateSize(); }, 200);
+            }, [activeDrivers]);
+
+            return <div id="map-container" ref={mapRef}></div>;
+        };
         // --- List Management Component (Admin Only) ---
         // ADDED: rooms prop and logic
         const ListManagement = ({ therapists, services, durations, drivers, rooms, onAdd, onDelete, onEdit }) => {
@@ -628,6 +705,7 @@
             const [durationsList, setDurationsList] = useState([]);
             const [driversList, setDriversList] = useState([]); 
             const [roomsList, setRoomsList] = useState([]); // ADDED: Room List State
+            const [activeDrivers, setActiveDrivers] = useState([]);
             
             const [view, setView] = useState('dashboard');
             const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -908,7 +986,17 @@
                             return a.name.localeCompare(b.name);
                         }));
                     }, (error) => console.error("Sync Error: Rooms", error));
-
+                
+// --- NEW: Active Drivers Listener ---
+                const unsubActiveDrivers = db.collection('drivers')
+                    .where('status', '==', 'active')
+                    .onSnapshot(snapshot => {
+                        const drivers = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        setActiveDrivers(drivers);
+                    }, (error) => console.error("Sync Error: Active Drivers", error));
 
                 return () => {  
                     unsubTrans();  
@@ -918,6 +1006,7 @@
                     unsubDurations();
                     unsubDrivers();
                     unsubRooms(); // Cleanup rooms
+                    unsubActiveDrivers();
                 };
             }, [fb, fbUser, isTransactionListenerActive, view, dashboardDate]); 
 
@@ -2114,6 +2203,7 @@
                         <div className="flex p-1 bg-slate-200/60 rounded-xl mb-6 sticky top-[70px] z-10 backdrop-blur-sm overflow-x-auto">
                             <button onClick={()=>setView('dashboard')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='dashboard'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.LayoutDashboard size={16}/> Daily</button>
                             <button onClick={()=>setView('add')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='add'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.Plus size={16}/> Booking</button>
+                            <button onClick={()=>setView('map')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='map'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.Map size={16}/> Map</button>
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
                             {user.role === 'admin' && <button onClick={()=>setView('lists')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='lists'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.ShieldCheck size={16}/> Lists</button>}
@@ -2721,7 +2811,28 @@
                                 </form>
                             </div>
                         )}
-
+{view === 'map' && (
+                            <div className="fade-in h-full flex flex-col">
+                                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-full flex flex-col">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-lg font-bold text-slate-800 flex gap-2 items-center">
+                                            <Icons.Map size={20} className="text-logo-green-700"/> Live Fleet Map
+                                        </h2>
+                                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1">
+                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> 
+                                            {activeDrivers.length} Active
+                                        </span>
+                                    </div>
+                                    <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-200 min-h-[500px]">
+                                        <LiveMap activeDrivers={activeDrivers} />
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-2 text-center">
+                                        Map updates automatically based on driver GPS signals.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        
                         {view === 'profile' && (
                             <div className="bg-white rounded-xl shadow-sm border border-logo-green-100 p-6 fade-in">
                                 <h3 className="font-bold text-slate-800 mb-4 flex gap-2"><Icons.UserCog className="text-logo-green-700"/> Profile</h3>
