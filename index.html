@@ -76,8 +76,7 @@
             'Talisay',  
             'Bacayan',  
             'Lapu-lapu',  
-            'AS Fortuna',
-            // 'Home Service' removed as it is now a locationType, not a branch
+            'AS Fortuna'
         ];
         
         // --- FIREBASE CONFIGURATION (Reverted to Hardcoded) ---
@@ -307,7 +306,7 @@
                         <h3 className="font-bold mb-4 flex items-center gap-2 text-sm uppercase tracking-wide text-slate-500"><Icons.Plus size={16}/> Add New {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h3>
                         <form onSubmit={handleFormSubmit} className="flex flex-col gap-3">
                             <div className="flex gap-2">
-                                <input  
+                                <input 
                                     required  
                                     placeholder={placeholderText}  
                                     value={newItemName}  
@@ -325,7 +324,7 @@
                                         {durations.map(d => (
                                             <div key={d.id} className="flex items-center gap-2 bg-white p-2 border rounded">
                                                 <span className="text-xs font-bold text-slate-600 whitespace-nowrap w-16">{d.name}:</span>
-                                                <input  
+                                                <input 
                                                     type="number"  
                                                     placeholder="Price"
                                                     className="w-full text-sm outline-none"
@@ -385,7 +384,7 @@
                                         <div className="flex justify-between items-center w-full">
                                             {editingId === item.id ? (
                                                 // Edit Mode Header
-                                                <input  
+                                                <input 
                                                     value={editName}
                                                     onChange={e => setEditName(e.target.value)}
                                                     className="flex-1 p-2 border rounded text-sm bg-white focus:ring-2 focus:ring-logo-green-500 mr-2"
@@ -480,7 +479,7 @@
                             )}
                         </div>
                     </div>
-                    {modal.isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60"><div className="bg-white rounded-xl p-6 max-w-sm"><h3 className="font-bold mb-2">{modal.title}</h3><p className="mb-4 text-sm">{modal.message}</p><div className="flex gap-2 justify-end">{modal.type==='confirm'&&<button onClick={closeModal} className="px-4 py-2 text-slate-500">Cancel</button>}<button onClick={modal.onConfirm||closeModal} className={`px-4 py-2 rounded text-white ${modal.confirmColor==='red'?'bg-red-500':'bg-logo-green-600'}`}>Okay</button></div></div></div>}
+                     {modal.isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60"><div className="bg-white rounded-xl p-6 max-w-sm"><h3 className="font-bold mb-2">{modal.title}</h3><p className="mb-4 text-sm">{modal.message}</p><div className="flex gap-2 justify-end">{modal.type==='confirm'&&<button onClick={closeModal} className="px-4 py-2 text-slate-500">Cancel</button>}<button onClick={modal.onConfirm||closeModal} className={`px-4 py-2 rounded text-white ${modal.confirmColor==='red'?'bg-red-500':'bg-logo-green-600'}`}>Okay</button></div></div></div>}
                 </div>
             );
         };
@@ -555,12 +554,8 @@
 
             const [user, setUser] = useState(null);
             const [users, setUsers] = useState([]);
-            // NEW STATE: Tracks when the user list has been loaded (critical for login form to show)
-            const [isUsersLoaded, setIsUsersLoaded] = useState(false);
             const [transactions, setTransactions] = useState([]);
             const [history, setHistory] = useState([]);
-            // NEW STATE: For future bookings list
-            const [futureBookings, setFutureBookings] = useState([]); 
             
             // NEW: Offline Queue State
             const [offlineQueue, setOfflineQueue] = useState([]);
@@ -600,15 +595,10 @@
                 amount: '',  
                 duration: '',  
                 type: 'booking', // booking, sale, expense
-                // NEW DATE FIELD
-                date: new Date().toISOString().slice(0, 10), 
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
                 notes: '',
-                category: '', // Used for Expense reason
-                // NEW HOME SERVICE FIELDS
-                locationType: 'In-Spa', 
-                transpoCharge: '' // Use string for input consistency
+                category: '' // Used for Expense reason
             });
             const [modal, setModal] = useState({
                 isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red'
@@ -762,7 +752,7 @@
 
                         } catch (error) {
                             console.error("Sync failed", error);
-                            // Keep remaining items in queue if partial fail?  
+                            // Keep remaining items in queue if partial fail? 
                             // For simplicity, we keep all if one fails to prevent data loss, or just retry next time.
                         } finally {
                             setIsGlobalLoading(false);
@@ -773,54 +763,35 @@
                 syncOfflineQueue();
             }, [isOnline, fb, offlineQueue.length]);
 
-            // --- NEW HELPER: Creates a Firestore Query based on branch filter ---
-            const getFilteredQuery = (collectionName) => {
-                if (!fb || !user) return; // Should not happen if called within sync useEffects
-                const basePath = `artifacts/${fb.appId}/public/data`;
-                let query = fb.db.collection(`${basePath}/${collectionName}`);
-                
-                // Only apply branch filter if user is NOT the Owner Admin ('ALL' view)
-                if (user.currentBranch && user.currentBranch !== 'ALL') {
-                    query = query.where('branch', '==', user.currentBranch);
-                }
-                return query;
-            };
 
             // --- 2. DATA SYNC (Listener Management) ---
             
             useEffect(() => {
-                // If Firebase client is not ready, we can't establish listeners.
-                if (!fb || !fbUser) return; 
-
+                if (!fb || !fbUser) return;
                 const { db, appId } = fb;
                 const basePath = `artifacts/${appId}/public/data`;
                 
                 const getCollection = (name) => db.collection(`${basePath}/${name}`);
                 
                 let unsubTrans = () => {};
-                
-                // Transactions: Only set up if user is logged in AND listener is active (Dashboard view)
-                if (user && isTransactionListenerActive && view === 'dashboard') {
-                    // Transactions: Use filtered query (filters by branch unless user is viewing 'ALL')
-                    const transactionQuery = getFilteredQuery('transactions');
-                    
-                    // FIX: Check if query is valid before trying to call onSnapshot
-                    if (transactionQuery) {
-                        unsubTrans = transactionQuery
-                            .onSnapshot((snapshot) => {
-                                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                                data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
-                                setTransactions(data);
-                                // Setting dbReady here indicates that the main dashboard data has been loaded at least once
-                                setDbReady(true);
-                            }, (error) => console.error("Sync Error: Transactions", error));
-                    }
+                if (isTransactionListenerActive && view === 'dashboard') {
+                    // Transactions (Active Listener ONLY when active and on dashboard)
+                    unsubTrans = getCollection('transactions')
+                        .onSnapshot((snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
+                            setTransactions(data);
+                            setDbReady(true);
+                        }, (error) => console.error("Sync Error: Transactions", error));
                 } else if (view !== 'dashboard' && isTransactionListenerActive) {
                     // Turn off listener if leaving dashboard view, even if active
                     setIsTransactionListenerActive(false);
+                } else if (!isTransactionListenerActive && view === 'dashboard') {
+                    // If listener is paused due to inactivity, transactions state will be stale.
+                    // We keep the old data for display and wait for reconnection.
                 }
 
-                // Users (Always Load All - Global Management List)
+                // Users (Always Load - Needed for Login/Team Management)
                 const unsubUsers = getCollection('users')
                     .onSnapshot(async (snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -828,7 +799,6 @@
                         
                         if (data.length === 0) {
                             seedDefaultUsers(db, basePath);
-                            // Do not set isUsersLoaded to true yet, seeding requires another cycle
                             return;  
                         }
 
@@ -850,19 +820,11 @@
                         
                         if (!shouldWait) {
                             setUsers(data);
-                            // --- FIX: Signal that the users collection has been received ---
-                            setIsUsersLoaded(true); 
                         }
 
-                    }, (error) => {
-                        console.error("Sync Error: Users", error);
-                        // In case of error, still proceed to login screen to avoid hard lock
-                        setIsUsersLoaded(true); 
-                    });
+                    }, (error) => console.error("Sync Error: Users", error));
 
-                // Master Lists (Always Load All - Small, Global Configuration)
-                // We keep fetching all for master lists as they are usually small and cross-branch
-                // and filtering them would unnecessarily complicate the 'lists' view.
+                // Master Lists (Always Load)
                 const unsubTherapists = getCollection('therapists')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -886,32 +848,6 @@
                         }));
                     }, (error) => console.error("Sync Error: Durations", error));
 
-                // NEW: Future Bookings Listener
-                const futureQuery = getFilteredQuery('future_bookings');
-                // FIX: Check if query is valid before trying to call onSnapshot
-                let unsubFuture = () => {};
-                if (futureQuery) {
-                    unsubFuture = futureQuery
-                        .onSnapshot((snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            // Sort by date (ascending) then time (ascending)
-                            data.sort((a, b) => {
-                                const dateA = a.date || '9999-12-31';
-                                const dateB = b.date || '9999-12-31';
-                                const timeA = a.time || '23:59';
-                                const timeB = b.time || '23:59';
-                                
-                                const fullA = `${dateA} ${timeA}`;
-                                const fullB = `${dateB} ${timeB}`;
-
-                                if (fullA < fullB) return -1;
-                                if (fullA > fullB) return 1;
-                                return 0;
-                            });
-                            setFutureBookings(data);
-                        }, (error) => console.error("Sync Error: Future Bookings", error));
-                }
-
 
                 return () => {  
                     unsubTrans();  
@@ -919,33 +855,31 @@
                     unsubTherapists();  
                     unsubServices();
                     unsubDurations();
-                    unsubFuture(); // Cleanup new listener
                 };
-            }, [fb, fbUser, user, isTransactionListenerActive, view]); // Added 'user' to dependencies
+            }, [fb, fbUser, isTransactionListenerActive, view]); // DEPENDENCY: isTransactionListenerActive now controls transaction sync
+
 
             // --- 2b. LAZY LOAD HISTORY (Only when View is 'history') ---
             useEffect(() => {
-                if (!fb || !fbUser || !user || view !== 'history') {
+                if (!fb || !fbUser || view !== 'history') {
                     if (history.length > 0) setHistory([]); // Free up memory
                     return;
                 }
                 
-                // History: Use filtered query (filters by branch unless user is viewing 'ALL')
-                const historyQuery = getFilteredQuery('history');
-                // FIX: Check if query is valid before trying to call onSnapshot
-                const unsub = historyQuery 
-                    ? historyQuery.onSnapshot((snapshot) => {
+                const { db, appId } = fb;
+                const basePath = `artifacts/${appId}/public/data`;
+                
+                const unsub = db.collection(`${basePath}/history`)
+                    .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         data.sort((a, b) => getMillis(b.timestamp_val) - getMillis(a.timestamp_val));
                         setHistory(data);
                     }, (error) => {
                         console.error("Sync Error: History", error);
-                    })
-                    : () => {}; // Return cleanup function if no listener was set
+                    });
 
                 return () => unsub();
-            }, [fb, fbUser, user, view]); // Added 'user' to dependencies
-            // --- END Data Fetching Refactor ---
+            }, [fb, fbUser, view]);  
 
             // --- 2c. REAL-TIME USER ROLE SYNC ---
             useEffect(() => {
@@ -1039,11 +973,12 @@
             // Filter Transactions by Branch AND My Shift Toggle
             const getFilteredData = () => {
                 if (!user) return [];
-                // The `transactions` state is already filtered by branch in the useEffect,
-                // so we only need to apply the `showMyShift` filter here.
-                let data = transactions; 
+                let data = transactions;
 
-                // 1. (Branch filter already applied during fetch in useEffect 2)
+                // 1. Filter by Branch (if not ALL)
+                if (user.currentBranch !== 'ALL') {
+                    data = data.filter(t => t.branch === user.currentBranch);
+                }
 
                 // 2. Filter by User (if My Shift is toggled AND user is staff)
                 if (showMyShift && user.role !== 'admin') {  
@@ -1083,18 +1018,10 @@
             // NEW: Branch-wise Financial Summary (Only calculated/shown for Owner Admin)
             const branchFinancials = useMemo(() => {
                 // Only run if the user is the Owner Admin viewing ALL branches
-                // NOTE: Since the main `transactions` state is no longer guaranteed to contain ALL data 
-                // when a user is logged into a specific branch, this ALL branch calculation should 
-                // ideally only run when `user.currentBranch === 'ALL'` and should look at all 
-                // transactions fetched by the global listener (if applicable), OR we rely on the history view.
-                
-                // Since the transaction listener is filtered, we cannot reliably compute this when logged 
-                // into a single branch. For now, we only compute when the user is explicitly set to 'ALL'.
-
-                if (user?.currentBranch !== 'ALL' || user.role !== 'admin' || transactions.length === 0) return null;  
+                if (user?.currentBranch !== 'ALL' || user.role !== 'admin') return null;  
 
                 const grouped = {};
-                const allTransactionData = transactions; // Use the transactions state which should contain all data IF currentBranch is 'ALL'
+                // Include all defined branches plus any unknown ones that might exist
                 const branchesToAnalyze = [...BRANCHES, 'Unknown'];
 
                 branchesToAnalyze.forEach(branch => {
@@ -1106,7 +1033,7 @@
                     };
                 });
 
-                allTransactionData.forEach(t => {
+                transactions.forEach(t => {
                     const branch = t.branch || 'Unknown';
                     const amount = Number(t.amount);
                     
@@ -1148,8 +1075,6 @@
                 const commissionableTransactions = filteredTransactions.filter(t => t.type !== 'expense' && t.status === 'completed');
 
                 commissionableTransactions.forEach(t => {
-                    // Use the branch recorded on the transaction, which is now guaranteed to be 
-                    // the one the user is viewing (or any if 'ALL').
                     const branch = t.branch || (user.currentBranch !== 'ALL' ? user.currentBranch : 'Unknown');
                     const name = t.therapist ? t.therapist.trim() : 'Unassigned';
                     
@@ -1245,56 +1170,6 @@
                 link.href = URL.createObjectURL(blob);
                 link.download = `AtHome_Report_${record.date.replace(/,/g, '').replace(/ /g, '_')}.csv`;
                 link.click();
-            };
-            
-            // NEW: Activates a future booking by moving it to live transactions
-            const handleActivateBooking = async (t) => {
-                const basePath = `artifacts/${fb.appId}/public/data`;
-                const futureColl = fb.db.collection(`${basePath}/future_bookings`);
-                const transColl = fb.db.collection(`${basePath}/transactions`);
-                
-                setModal({
-                    isOpen: true, type: 'confirm', title: 'Activate Booking?', 
-                    message: `Move "${t.clientName}" (${t.date} @ ${t.time}) back to Live Records for processing/completion?`, 
-                    confirmColor: 'teal',
-                    onConfirm: async () => {
-                        closeModal();
-                        setIsGlobalLoading(true);
-                        try {
-                            // 1. Delete from future_bookings
-                            await futureColl.doc(t.id).delete();
-                            
-                            // 2. Add to transactions (as a new record, status pending)
-                            const newLiveRecord = {
-                                clientName: t.clientName,
-                                service: t.service,
-                                therapist: t.therapist,
-                                amount: t.amount,
-                                basePrice: t.basePrice,
-                                transpoCharge: t.transpoCharge,
-                                locationType: t.locationType,
-                                duration: t.duration,
-                                type: 'booking',
-                                status: 'pending',
-                                time: t.time,
-                                date: t.date, // Preserve date if booked for today
-                                recordedBy: user.name, // Rerecorded by activator
-                                branch: user.currentBranch,
-                                notes: t.notes,
-                                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                            };
-
-                            await transColl.add(newLiveRecord);
-
-                            setModal({ isOpen: true, type: 'alert', title: 'Booking Activated!', message: `${t.clientName}'s booking is now in your Live Records.`, confirmColor: 'logo-green', onConfirm: closeModal });
-                        } catch (error) {
-                            console.error("Activation failed", error);
-                            setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to activate booking. Please check connection.', confirmColor: 'red', onConfirm: closeModal });
-                        } finally {
-                            setIsGlobalLoading(false);
-                        }
-                    }
-                });
             };
 
 
@@ -1503,8 +1378,7 @@
                 setFormData({  
                     ...formData,  
                     service: serviceName,
-                    amount: newPrice,
-                    transpoCharge: '' // Clear transpo charge if service changes
+                    amount: newPrice  
                 });
             };
 
@@ -1515,8 +1389,7 @@
                 setFormData({  
                     ...formData,  
                     duration: durationName,
-                    amount: newPrice,
-                    transpoCharge: '' // Clear transpo charge if duration changes
+                    amount: newPrice  
                 });
             };
 
@@ -1526,24 +1399,10 @@
                 const transactionType = typeOverride || formData.type;
                 const transactionBranch = user.currentBranch === 'ALL' ? formData.targetBranch : user.currentBranch;
 
-                const transpoChargeValue = parseFloat(formData.transpoCharge) || 0;
-                const isHomeService = formData.locationType === 'Home Service';
-
                 if (user.currentBranch === 'ALL' && !formData.targetBranch) {
                     setModal({ isOpen: true, type: 'alert', title: 'Missing Branch', message: 'Please select a Target Branch.', onConfirm: closeModal, confirmColor: 'red' });
                     return;
                 }
-                
-                // Determine if this is a Future Booking (Booking type + Future date)
-                const today = new Date().toISOString().slice(0, 10);
-                const isFutureBooking = transactionType === 'booking' && formData.date > today;
-                
-                const targetCollectionName = isFutureBooking ? 'future_bookings' : 'transactions';
-                const successTitle = isFutureBooking ? 'Future Booking Saved!' : 'Record Saved!';
-                const successMessage = isFutureBooking 
-                    ? `Booking saved for ${formData.date} at ${transactionBranch}. It can be activated later from the 'Future' tab.`
-                    : `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`;
-
 
                 if (transactionType === 'expense') {
                     if (!formData.amount || !formData.category || !formData.notes) {
@@ -1556,38 +1415,24 @@
                         return;
                     }
 
-                    // NEW: Home Service validation
-                    if (isHomeService && (formData.transpoCharge === '' || transpoChargeValue <= 0)) {
-                        setModal({ isOpen: true, type: 'alert', title: 'Missing Charge', message: 'Home Service requires a Transportation Charge greater than 0.', onConfirm: closeModal, confirmColor: 'red' });
+                    // VALIDATION: Check for conflicts (Same Therapist at Exact Same Time)
+                    const allBookings = [...transactions, ...offlineQueue];
+                    const isConflict = allBookings.some(t =>  
+                        t.therapist === formData.therapist &&  
+                        t.time === formData.time &&
+                        t.type !== 'expense' // Don't check expenses
+                    );
+
+                    if (isConflict) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Booking Conflict', message: `Therapist ${formData.therapist} is already booked at ${formData.time}.`, onConfirm: closeModal, confirmColor: 'red' });
                         return;
-                    }
-
-                    // VALIDATION: Check for conflicts (Same Therapist at Exact Same Time/Date) - Only for Live Bookings
-                    if (targetCollectionName === 'transactions') {
-                        const allBookings = [...transactions, ...offlineQueue];
-                        const isConflict = allBookings.some(t =>  
-                            t.therapist === formData.therapist &&  
-                            t.time === formData.time &&
-                            t.date === formData.date &&
-                            t.type !== 'expense' // Don't check expenses
-                        );
-
-                        if (isConflict) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Booking Conflict', message: `Therapist ${formData.therapist} is already booked at ${formData.time} on ${formData.date}.`, onConfirm: closeModal, confirmColor: 'red' });
-                            return;
-                        }
                     }
                 }
                 
-                // Calculate base amount and adjust for expense/transpo
-                let basePrice = parseFloat(formData.amount);
-                let amountValue = basePrice;
-
+                let amountValue = parseFloat(formData.amount);
                 if (transactionType === 'expense') {
+                    // Expenses must be stored as negative numbers for easy calculation
                     amountValue = -Math.abs(amountValue);
-                } else if (isHomeService) {
-                    // Add transportation charge to the total amount
-                    amountValue += transpoChargeValue; 
                 }
 
                 // Payload
@@ -1597,15 +1442,11 @@
                     service: formData.service,
                     category: formData.category, // Used for expense category
                     therapist: formData.therapist,
-                    amount: amountValue, // Total amount
-                    basePrice: basePrice, // Store base price separately for breakdown
-                    transpoCharge: isHomeService ? transpoChargeValue : 0, // Store charge separately
-                    locationType: formData.locationType, // Store location type
+                    amount: amountValue,
                     duration: formData.duration,
                     type: transactionType,
                     status: transactionType === 'expense' ? 'completed' : (transactionType === 'sale' ? 'completed' : 'pending'),
                     time: formData.time,
-                    date: formData.date, // NEW: Save Date
                     recordedBy: user.name,
                     branch: transactionBranch,
                     notes: formData.notes.trim()
@@ -1623,11 +1464,8 @@
                     const resetTargetBranch = user.currentBranch === 'ALL' ? transactionBranch : user.currentBranch;
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
-                        type: 'booking', 
-                        date: today, // Reset date
-                        time: new Date().toTimeString().slice(0, 5),  
-                        targetBranch: resetTargetBranch, notes: '', category: '',
-                        locationType: 'In-Spa', transpoCharge: '' // Reset new fields
+                        type: 'booking', time: new Date().toTimeString().slice(0, 5),  
+                        targetBranch: resetTargetBranch, notes: '', category: ''
                     });
 
                     setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} queued. Will sync when online.`, onConfirm: closeModal, confirmColor: 'orange' });
@@ -1638,7 +1476,7 @@
                 setIsGlobalLoading(true);
                 try {
                     const basePath = `artifacts/${fb.appId}/public/data`;
-                    await fb.db.collection(`${basePath}/${targetCollectionName}`).add({
+                    await fb.db.collection(`${basePath}/transactions`).add({
                         ...transactionPayload,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
@@ -1647,16 +1485,13 @@
                     
                     setFormData({  
                         clientName: '', service: '', duration: '', therapist: '', amount: '',  
-                        type: 'booking', 
-                        date: today, // Reset date
-                        time: new Date().toTimeString().slice(0, 5),
-                        targetBranch: resetTargetBranch, notes: '', category: '',
-                        locationType: 'In-Spa', transpoCharge: '' // Reset new fields
+                        type: 'booking', time: new Date().toTimeString().slice(0, 5),
+                        targetBranch: resetTargetBranch, notes: '', category: ''
                     });
                     
-                    setModal({ isOpen: true, type: 'alert', title: successTitle, message: successMessage, onConfirm: closeModal, confirmColor: 'logo-green' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Record Saved!', message: `${transactionType.charAt(0).toUpperCase() + transactionType.slice(1)} saved for ${transactionBranch}.`, onConfirm: closeModal, confirmColor: 'logo-green' });
 
-                    setView(isFutureBooking ? 'future' : 'dashboard');
+                    setView('dashboard');
                 } catch (error) {
                     setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to save record. Please check connection.', onConfirm: closeModal, confirmColor: 'red' });
                 } finally {
@@ -1680,19 +1515,19 @@
                 }
             };
 
-            const requestDelete = (id, collectionName = 'transactions') => {
+            const requestDelete = (id) => {
                 if (user?.role !== 'admin') {  
                     setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only Admin can delete.', onConfirm: closeModal, confirmColor: 'red' });  
                     return;
                 }
                 setModal({
-                    isOpen: true, type: 'confirm', title: 'Delete Record?', message: `Permanently remove this record from the ${collectionName.replace('_', ' ')} list?`, confirmColor: 'red',
+                    isOpen: true, type: 'confirm', title: 'Delete Record?', message: 'Permanently remove from cloud?', confirmColor: 'red',
                     onConfirm: async () => {
                         closeModal();
                         setIsGlobalLoading(true);
                         try {
                             const basePath = `artifacts/${fb.appId}/public/data`;
-                            await fb.db.collection(`${basePath}/${collectionName}`).doc(id).delete();
+                            await fb.db.collection(`${basePath}/transactions`).doc(id).delete();
                         } catch(err) {
                             setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Delete failed.', confirmColor: 'red', onConfirm: closeModal });
                         } finally {
@@ -1715,9 +1550,7 @@
                 }
 
                 setModal({
-                    isOpen: true, type: 'confirm', title: 'Archive & Start New Shift?', 
-                    message: `This will: 1) Archive all COMPLETED sales and EXPENSES to History. 2) Move all PENDING bookings to the Future Bookings list. Continue?`, 
-                    confirmColor: 'logo-green',
+                    isOpen: true, type: 'confirm', title: 'Archive & Start New Shift?', message: `This will permanently save and clear all active records for ${user.currentBranch}. The report will be stored in History.`, confirmColor: 'logo-green',
                     onConfirm: async () => {
                         closeModal();
                         setIsGlobalLoading(true);
@@ -1727,68 +1560,38 @@
                         try {
                             const basePath = `artifacts/${fb.appId}/public/data`;
                             const historyColl = fb.db.collection(`${basePath}/history`);
-                            const futureColl = fb.db.collection(`${basePath}/future_bookings`);
                             const transColl = fb.db.collection(`${basePath}/transactions`);
 
-                            // Determine which records to archive/delete
-                            const recordsToArchive = filteredTransactions.filter(t => t.status === 'completed' || t.type === 'expense');
-                            const pendingToMove = filteredTransactions.filter(t => t.status === 'pending');
+                            // 1. ATTEMPT TO ARCHIVE DATA
+                            await historyColl.add({
+                                date: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+                                timestamp: new Date().toLocaleString(),
+                                timestamp_val: firebase.firestore.FieldValue.serverTimestamp(),
+                                transactions: filteredTransactions,
+                                stats: stats,
+                                therapist_stats: therapistStats,  
+                                branch: user.currentBranch,
+                                closedBy: user.name
+                            });
+                            historySaveSuccess = true;
                             
-                            if (recordsToArchive.length === 0 && pendingToMove.length === 0) {
-                                setModal({ isOpen: true, type: 'alert', title: 'No Activity to Close', message: `Nothing to archive or move for ${user.currentBranch}.`, confirmColor: 'logo-green', onConfirm: closeModal });
-                                return;
-                            }
+                            // 2. IF ARCHIVE SUCCESSFUL, ATTEMPT TO DELETE LIVE DATA
+                            const deletePromises = filteredTransactions.map(t => transColl.doc(t.id).delete());
+                            await Promise.all(deletePromises);
 
-                            // 1. ATTEMPT TO ARCHIVE COMPLETED DATA TO HISTORY
-                            if (recordsToArchive.length > 0) {
-                                await historyColl.add({
-                                    date: new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-                                    timestamp: new Date().toLocaleString(),
-                                    timestamp_val: firebase.firestore.FieldValue.serverTimestamp(),
-                                    transactions: recordsToArchive, 
-                                    stats: stats, 
-                                    therapist_stats: therapistStats,  
-                                    branch: user.currentBranch,
-                                    closedBy: user.name
-                                });
-                                historySaveSuccess = true;
-                            }
-                            
-                            // 2. MOVE PENDING BOOKINGS TO FUTURE BOOKINGS COLLECTION
-                            let movePromises = [];
-                            if (pendingToMove.length > 0) {
-                                // First, add them to the future_bookings collection
-                                const addFuturePromises = pendingToMove.map(t => {
-                                    // Create a copy without the old ID to ensure a new document is created
-                                    const { id, ...data } = t;
-                                    return futureColl.add({
-                                        ...data,
-                                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                                    });
-                                });
-                                await Promise.all(addFuturePromises);
-                                movePromises = pendingToMove.map(t => transColl.doc(t.id).delete());
-                            }
-
-                            // 3. DELETE ALL PROCESSED RECORDS FROM LIVE TRANSACTIONS
-                            const deletePromises = recordsToArchive.map(t => transColl.doc(t.id).delete());
-                            await Promise.all([...deletePromises, ...movePromises]);
-
-                            // 4. COMPLETE SUCCESS
+                            // 3. COMPLETE SUCCESS
                             setView('dashboard');  
-                            setModal({ isOpen: true, type: 'alert', 
-                                title: 'Shift Closed!', 
-                                message: `Archived ${recordsToArchive.length} completed records. Moved ${pendingToMove.length} pending bookings to Future.`, 
-                                confirmColor: 'logo-green', onConfirm: closeModal });
+                            setModal({ isOpen: true, type: 'alert', title: 'Shift Closed!', message: `Shift transactions successfully archived for ${user.currentBranch}.`, confirmColor: 'logo-green', onConfirm: closeModal });
 
                         } catch (error) {
                             console.error("End Day Fatal Error:", error);
                             
-                            // 5. HANDLE FAILURE
+                            // 4. HANDLE FAILURE
                             let title = 'End Day Failed';
                             let message = 'An error occurred during the closing process. Your data has been preserved in the Live Records. Please check your connection or contact support.';
 
                             if (historySaveSuccess) {
+                                // If the history save succeeded but deletion failed:
                                 title = 'Cleanup Failed';
                                 message = 'The shift report was successfully saved to History, but clearing the dashboard failed. Live Records may contain entries that need manual deletion (Admin only).';
                             }
@@ -1987,26 +1790,23 @@
 
             // --- RENDER ---
 
-            // NEW: Initial loading check only waits for Firebase client to be initialized
-            if (!fb) return (
-                <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 fade-in">
-                    <div className="loader mb-4"></div>
-                    <p className="text-slate-400 text-sm">Connecting to Spa Cloud...</p>
+            if (configError) return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 text-center p-4">
+                    <div className="bg-white p-8 rounded-xl shadow-lg max-w-md">
+                        <Icons.Cloud size={48} className="mx-auto text-slate-400 mb-4"/>
+                        <h2 className="text-xl font-bold text-slate-800 mb-2">Setup Failed</h2>
+                        <p className="text-slate-500 text-sm mb-6 font-mono bg-slate-50 p-2 rounded border text-left text-xs">{configError}</p>
+                        <p className="text-xs text-slate-400">
+                            Check the console for detailed Firebase connection errors.
+                        </p>
+                    </div>
                 </div>
             );
 
-            // LOGIN SCREEN: Must wait for user list to be loaded before showing login form
+            if (!dbReady && fb) return <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50"><div className="loader mb-4"></div><p className="text-slate-400 text-sm">Connecting to Spa Cloud...</p></div>;
+
+            // LOGIN SCREEN
             if (!user) {
-                if (!isUsersLoaded) {
-                    // Show a second loading state while waiting for essential user data
-                    return (
-                        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 fade-in">
-                            <div className="loader mb-4"></div>
-                            <p className="text-slate-400 text-sm">Loading user credentials...</p>
-                        </div>
-                    );
-                }
-                
                 return (
                     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 fade-in relative">
                         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-logo-green-100 text-center relative overflow-hidden">
@@ -2074,11 +1874,6 @@
                             {/* UPDATED: Expense button label */}
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
-                            {/* NEW: Future Bookings tab */}
-                            <button onClick={()=>setView('future')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='future'?'bg-white text-teal-600 shadow-sm':'text-slate-500'} relative`}>
-                                <Icons.Calendar size={16}/> Future
-                                {futureBookings.length > 0 && <span className="absolute -top-1 -right-1 bg-teal-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white">{futureBookings.length}</span>}
-                            </button>
                             {/* REVERTED: Only show Lists/History/Team if role is 'admin' */}
                             {user.role === 'admin' && (  
                                 <>
@@ -2152,12 +1947,12 @@
                                         <p className="text-sm text-slate-400 italic text-center py-2">No completed activity yet.</p>
                                     ) : (
                                         Object.keys(therapistStats).sort((a, b) => {
-                                            const idxA = BRANCHES.indexOf(a);
-                                            const idxB = BRANCHES.indexOf(b);
-                                            if (idxA === -1 && idxB === -1) return a.localeCompare(b);
-                                            if (idxA === -1) return 1;
-                                            if (idxB === -1) return -1;
-                                            return idxA - idxB;
+                                             const idxA = BRANCHES.indexOf(a);
+                                             const idxB = BRANCHES.indexOf(b);
+                                             if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                                             if (idxA === -1) return 1;
+                                             if (idxB === -1) return -1;
+                                             return idxA - idxB;
                                             }).map(branch => (
                                                 <div key={branch} className="mb-4 last:mb-0">
                                                     {(user.currentBranch === 'ALL' || Object.keys(therapistStats).length > 1) && (
@@ -2226,11 +2021,7 @@
                                         </div>
                                     )}
 
-                                    {filteredTransactions.length===0?
-                                        <div className="text-center py-12 border border-dashed rounded-xl text-slate-400 text-sm">
-                                            {dbReady ? 'No records found for the current filter.' : 'Loading live transactions...'}
-                                        </div>
-                                    :
+                                    {filteredTransactions.length===0?<div className="text-center py-12 border border-dashed rounded-xl text-slate-400 text-sm">No records found for the current filter.</div>:
                                     <div className="space-y-3">
                                         {filteredTransactions.map(t=>(
                                             // UPDATED: Conditional styling based on type
@@ -2241,11 +2032,7 @@
                                                     {/* Displaying timestamp date for consistency */}
                                                     <div className="flex gap-2 mb-1 items-center">
                                                         <span className="text-[10px] font-bold bg-slate-100 px-2 rounded text-slate-500">{t.branch}</span>
-                                                        {/* NEW: Location Type Label */}
-                                                        {t.locationType && t.locationType !== 'In-Spa' && (
-                                                            <span className="text-[10px] font-bold bg-teal-100 px-2 rounded text-teal-700">{t.locationType}</span>
-                                                        )}
-                                                        <span className="text-xs font-mono text-slate-400">{t.date} - {t.time}</span>
+                                                        <span className="text-xs font-mono text-slate-400">{formatDate(t.timestamp)} - {t.time}</span>
                                                     </div>
                                                     
                                                     {/* UPDATED: Display clientName or category */}
@@ -2275,12 +2062,6 @@
                                                 
                                                 <div className="text-right min-w-[80px]">
                                                     <div className={`font-bold text-lg ${t.type === 'expense' ? 'text-red-600' : (t.status==='completed'?'text-logo-green-700':'text-orange-600')}`}>{formatCurrency(t.amount)}</div>
-                                                    {/* NEW: Display Breakdown if Home Service */}
-                                                    {t.locationType === 'Home Service' && t.transpoCharge > 0 && (
-                                                        <div className="text-[9px] text-slate-500 mt-0.5">
-                                                            ({formatCurrency(t.basePrice || 0)} Base + {formatCurrency(t.transpoCharge)} Transpo)
-                                                        </div>
-                                                    )}
                                                     <div className="flex justify-end gap-2 mt-1">
                                                         {t.type !== 'expense' && (
                                                             <button onClick={()=>toggleStatus(t)} className={`p-1.5 rounded-full ${t.status==='completed'?'bg-logo-green-100 text-logo-green-700':'bg-orange-100 text-orange-600'}`}>
@@ -2296,70 +2077,6 @@
                                 </div>
                             </div>
                         )}
-                        
-                        {/* NEW: FUTURE BOOKINGS VIEW */}
-                        {view === 'future' && (
-                            <div className="space-y-6 fade-in">
-                                <h2 className="text-lg font-bold text-teal-700 flex gap-2"><Icons.Calendar size={20}/> Future Pending Bookings</h2>
-                                <p className="text-sm text-slate-500">Appointments are kept here until activated. They only appear for your branch.</p>
-
-                                {futureBookings.length === 0 ? (
-                                    <div className="text-center py-12 border border-dashed rounded-xl border-teal-200 text-slate-400 text-sm">No future bookings found for {user.currentBranch}.</div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {futureBookings.map(t => (
-                                            <div key={t.id} className={`bg-white p-4 rounded-xl border-l-[6px] border-teal-400 shadow-sm flex justify-between items-start`}>
-                                                <div className="flex-1 pr-4">
-                                                    <div className="flex gap-2 mb-1 items-center">
-                                                        <span className="text-[10px] font-bold bg-teal-100 px-2 rounded text-teal-700">PENDING</span>
-                                                        {t.locationType && t.locationType !== 'In-Spa' && (
-                                                            <span className="text-[10px] font-bold bg-teal-100 px-2 rounded text-teal-700">{t.locationType}</span>
-                                                        )}
-                                                        <span className="text-xs font-mono text-slate-500">{t.date} - {t.time}</span>
-                                                    </div>
-                                                    
-                                                    <h3 className="font-bold text-slate-800">{t.clientName}</h3>
-                                                    
-                                                    <div className="text-xs text-slate-500 mt-1 flex gap-2 flex-wrap">
-                                                        <span>{t.service}</span>
-                                                        {t.duration && <span> • {t.duration}</span>}
-                                                        <span> • {t.therapist}</span>
-                                                    </div>
-                                                    {t.transpoCharge > 0 && (
-                                                        <div className="text-[9px] text-slate-500 mt-1">
-                                                            Transport Fee: {formatCurrency(t.transpoCharge)}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                
-                                                <div className="text-right min-w-[80px]">
-                                                    <div className="font-bold text-lg text-teal-700">{formatCurrency(t.amount)}</div>
-                                                    <div className="flex flex-col gap-2 mt-2">
-                                                        <button 
-                                                            onClick={() => handleActivateBooking(t)} 
-                                                            className="bg-logo-green-600 text-white text-xs font-bold px-3 py-1 rounded-full hover:bg-logo-green-700 transition"
-                                                            title="Move to Live Records for completion"
-                                                        >
-                                                            Activate
-                                                        </button>
-                                                        {user.role==='admin' && (
-                                                            <button 
-                                                                onClick={()=>requestDelete(t.id, 'future_bookings')} 
-                                                                className="text-slate-300 hover:text-red-500 p-1"
-                                                            >
-                                                                <Icons.Trash2 size={16}/>
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        {/* END FUTURE BOOKINGS VIEW */}
-
 
                         {view === 'add' && (
                             <div className="bg-white rounded-2xl shadow-sm border border-logo-green-100 p-6 fade-in">
@@ -2378,7 +2095,6 @@
                                             >
                                                 <option value="" disabled>SELECT TARGET BRANCH*</option>
                                                 {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                                                <option value="ALL" className="font-bold text-logo-green-700">ALL BRANCHES (Owner View)</option>
                                             </select>
                                             <Icons.ChevronDown size={16} className="absolute right-3 top-4 text-slate-400 pointer-events-none"/>
                                         </div>
@@ -2390,23 +2106,6 @@
                                         <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='booking'?'border-logo-green-700 bg-logo-green-50/50':'border-slate-100'}`}><input type="radio" name="type" value="booking" checked={formData.type==='booking'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.Calendar/><span className="text-sm font-bold">Appointment</span></label>
                                         <label className={`border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.type==='sale'?'border-teal-600 bg-teal-50/50':'border-slate-100'}`}><input type="radio" name="type" value="sale" checked={formData.type==='sale'} onChange={(e)=>setFormData({...formData, type:e.target.value})} className="hidden"/><Icons.DollarSign/><span className="text-sm font-bold">Direct Pay</span></label>
                                     </div>
-                                    
-                                    {/* Location Type Selector */}
-                                    {formData.type !== 'expense' && (
-                                        <div className="flex gap-2 col-span-2">
-                                            <label className={`flex-1 border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.locationType === 'In-Spa' ? 'border-logo-green-700 bg-logo-green-50/50' : 'border-slate-100'}`}>
-                                                <input type="radio" name="locationType" value="In-Spa" checked={formData.locationType === 'In-Spa'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value, transpoCharge: '' })} className="hidden"/>
-                                                <Icons.Home size={20}/>
-                                                <span className="text-sm font-bold">In-Spa/Clinic</span>
-                                            </label>
-                                            <label className={`flex-1 border-2 rounded-xl p-3 flex flex-col items-center gap-2 ${formData.locationType === 'Home Service' ? 'border-teal-600 bg-teal-50/50' : 'border-slate-100'}`}>
-                                                <input type="radio" name="locationType" value="Home Service" checked={formData.locationType === 'Home Service'} onChange={(e) => setFormData({ ...formData, locationType: e.target.value })} className="hidden"/>
-                                                <Icons.User size={20}/>
-                                                <span className="text-sm font-bold">Home Service</span>
-                                            </label>
-                                        </div>
-                                    )}
-
                                     <input required placeholder="Client Name*" value={formData.clientName} onChange={e=>setFormData({...formData, clientName:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     
                                     <div className="space-y-4">
@@ -2438,32 +2137,18 @@
                                         className="w-full p-3 border rounded-xl bg-slate-50 resize-none"
                                     />
 
-                                    <div className="grid grid-cols-3 gap-4">
-                                        {/* Price / Date / Time */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* Price is now editable and required, auto-filled by service selection */}
                                         <input required  
                                             type="number" step="0.01"  
-                                            placeholder="Base Price (P)*"  
+                                            placeholder="Price (P)*"  
                                             value={formData.amount}  
                                             onChange={e=>setFormData({...formData, amount:e.target.value})}  
                                             className="w-full p-3 border rounded-xl bg-slate-50"
                                         />
-                                        <input required type="date" value={formData.date} onChange={e=>setFormData({...formData, date:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
-                                        <input required type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
+                                        <input type="time" value={formData.time} onChange={e=>setFormData({...formData, time:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     </div>
-                                    
-                                    {/* Conditional Transportation Charge Input */}
-                                    {formData.locationType === 'Home Service' && (
-                                        <input required  
-                                            type="number" step="0.01"  
-                                            min="0.01"
-                                            placeholder="Transportation Charge (P)*"  
-                                            value={formData.transpoCharge}  
-                                            onChange={e=>setFormData({...formData, transpoCharge:e.target.value})}  
-                                            className="w-full p-3 border rounded-xl bg-slate-100 border-teal-300 font-bold col-span-3"
-                                        />
-                                    )}
-
-                                    <button className="w-full bg-logo-green-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2 col-span-3">Save Booking</button>
+                                    <button className="w-full bg-logo-green-700 text-white font-bold py-4 rounded-xl shadow-lg mt-2">Save Booking</button>
                                 </form>
                             </div>
                         )}
@@ -2487,7 +2172,7 @@
                                                 <option value="" disabled>SELECT BRANCH AFFECTED*</option>
                                                 {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
                                             </select>
-                                            <Icons.ChevronDown size={16} className="absolute right-3 top-3.5 text-slate-400 pointer-events-none"/>
+                                            <Icons.ChevronDown size={16} className="absolute right-3 top-4 text-slate-400 pointer-events-none"/>
                                         </div>
                                     ) : (
                                         <div className="p-3 bg-red-50 rounded-lg text-sm text-red-800 font-medium flex items-center gap-2"><Icons.MapPin size={16}/> Logging for: {user.currentBranch}</div>
