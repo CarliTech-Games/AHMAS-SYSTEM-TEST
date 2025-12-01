@@ -706,6 +706,70 @@
             );
         };
 
+        // --- ROOM MANAGEMENT COMPONENT ---
+        const RoomManagement = ({ user, rooms, roomStatuses, onCheckInOut, getRoomBookingInfo }) => {
+            const currentBranchRooms = useMemo(() => {
+                if (user.currentBranch === 'ALL') return rooms;
+                return rooms.filter(r => r.branch === user.currentBranch);
+            }, [rooms, user.currentBranch]);
+
+            return (
+                <div className="space-y-6 fade-in">
+                    <h2 className="text-lg font-bold text-logo-green-800 flex gap-2 items-center"><Icons.DoorOpen size={18} className="text-logo-green-700"/> Room Status Tracker ({user.currentBranch})</h2>
+                    <p className="text-sm text-slate-500">Manage current client occupation status for spa rooms.</p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {currentBranchRooms.map(room => {
+                            const status = roomStatuses[room.name] || { status: 'available' };
+                            const isOccupied = status.status === 'occupied';
+                            const info = getRoomBookingInfo(room.name);
+
+                            return (
+                                <div 
+                                    key={room.id} 
+                                    className={`p-4 rounded-xl shadow-lg border-l-4 ${
+                                        isOccupied 
+                                            ? 'bg-red-50 border-red-500' 
+                                            : 'bg-logo-green-50 border-logo-green-500'
+                                    } transition-shadow`}
+                                >
+                                    <h3 className="font-bold text-xl flex items-center gap-2">
+                                        <Icons.DoorOpen size={20} className={isOccupied ? 'text-red-700' : 'text-logo-green-700'}/>
+                                        {room.name}
+                                    </h3>
+                                    <p className={`text-xs font-bold uppercase mt-1 ${isOccupied ? 'text-red-600' : 'text-logo-green-600'}`}>
+                                        {isOccupied ? 'OCCUPIED' : 'AVAILABLE'}
+                                    </p>
+
+                                    {isOccupied && info && (
+                                        <div className="mt-3 text-xs space-y-1">
+                                            <p className="text-slate-700 font-semibold">Client: {info.clientName}</p>
+                                            <p className="text-slate-500">Therapist: {info.therapistName}</p>
+                                            <p className="text-slate-500">Check In: {info.checkInTime}</p>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-4">
+                                        <button
+                                            onClick={() => onCheckInOut(room.name, isOccupied ? 'check_out' : 'check_in')}
+                                            disabled={isOccupied && !info} // Can't check out if occupied but missing live booking data
+                                            className={`w-full py-2 rounded-lg text-xs font-bold transition-colors ${
+                                                isOccupied 
+                                                    ? 'bg-red-500 text-white hover:bg-red-600 disabled:bg-red-200' 
+                                                    : 'bg-logo-green-700 text-white hover:bg-logo-green-800'
+                                            }`}
+                                        >
+                                            {isOccupied ? 'CHECK OUT' : 'CHECK IN'}
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
 
         // --- MAIN APP ---
         const App = () => {
@@ -736,6 +800,9 @@
             const [driversList, setDriversList] = useState([]);  
             const [roomsList, setRoomsList] = useState([]); 
             const [discountsList, setDiscountsList] = useState([]); 
+
+            // Room Status Tracking State
+            const [roomStatuses, setRoomStatuses] = useState({});
             
             const [view, setView] = useState('dashboard');
             const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -766,10 +833,10 @@
                 category: '',  
                 bookingDate: getTodayStr(),  
                 location: 'spa',  
-                transportFee: '', // Used for transport fee in booking
-                amount: '', // Used for amount in expense view
+                transportFee: '', 
+                amount: '', 
                 driver: '',
-                room: '',
+                room: '', // Deprecated global room, keeping for old logic safety
                 paymentMethod: 'Cash' 
             });
             const [modal, setModal] = useState({
@@ -784,7 +851,8 @@
             // Multi-therapist/service state
             const [selectedTherapists, setSelectedTherapists] = useState([]);
             const [selectedDrivers, setSelectedDrivers] = useState([]);
-            const [therapistRows, setTherapistRows] = useState({}); // Track service, duration, amount per therapist
+            const [selectedRooms, setSelectedRooms] = useState([]); // NEW: Multi-room selection array
+            const [therapistRows, setTherapistRows] = useState({}); 
 
             // NEW: Discount State for Booking/Sale
             const [selectedDiscountId, setSelectedDiscountId] = useState('');
@@ -997,10 +1065,11 @@
             }, [fb, fbUser, isTransactionListenerActive, view, dashboardDate]);  
 
             
-            // --- 2c. MASTER DATA LISTENER (Lists/Add/Expense/Team Views Only) ---
+            // --- 2c. MASTER DATA LISTENER (Lists/Add/Expense/Rooms/Team Views Only) ---
             // Listener only runs when these views are active to save reads.
             useEffect(() => {
-                if (!fb || !fbUser || !['add', 'expense', 'lists', 'team'].includes(view)) {
+                const activeViews = ['add', 'expense', 'lists', 'team', 'rooms'];
+                if (!fb || !fbUser || !activeViews.includes(view)) {
                     // Clear data when listener is not active to save memory/prevent stale data
                     setTherapistsList([]);
                     setServicesList([]);
@@ -1008,6 +1077,7 @@
                     setDriversList([]);
                     setRoomsList([]);
                     setDiscountsList([]);
+                    setRoomStatuses({});
                     return () => {};
                 }
                 
@@ -1059,6 +1129,16 @@
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setDiscountsList(data.sort((a, b) => a.name.localeCompare(b.name)));
                     }, (error) => console.error("Sync Error: Discounts", error));
+
+                // NEW: Room Status Listener
+                const unsubRoomStatuses = getCollection('roomStatuses')
+                    .onSnapshot((snapshot) => {
+                        const statuses = {};
+                        snapshot.forEach(doc => {
+                            statuses[doc.id] = { id: doc.id, ...doc.data() };
+                        });
+                        setRoomStatuses(statuses);
+                    }, (error) => console.error("Sync Error: Room Statuses", error));
                 
                 return () => {  
                     unsubTherapists();  
@@ -1067,6 +1147,7 @@
                     unsubDrivers();
                     unsubRooms(); 
                     unsubDiscounts(); 
+                    unsubRoomStatuses();
                 };
             }, [fb, fbUser, view]);  
 
@@ -1356,71 +1437,23 @@
                 return data;
             }, [history, historyStartDate, historyEndDate, user]);
 
-            const downloadCSV = (record) => {
-                const headers = ['Date', 'Branch', 'Time', 'Client Name', 'Client Contact', 'Description', 'Service / Category', 'Duration', 'Therapist', 'Driver', 'Location', 'Room', 'Payment Method', 'Discount Name', 'Discount Amount', 'Transport Fee (Split)', 'Total Amount (Inc. Split Fee)', 'Commission Amount', 'Status', 'Recorded By', 'Notes'];  
-                
-                const getCommissionForTransaction = (t, therapistStatsArchive) => {
-                    if (t.type !== 'expense' && t.status !== 'pending' && t.therapist) {
-                        const branch = t.branch || 'Unknown';
-                        const therapistName = t.therapist.trim();
-
-                        if (therapistStatsArchive[branch]) {
-                            const therapistData = therapistStatsArchive[branch].find(s => s.name === therapistName);
-                            if (therapistData) {
-                                let baseAmount = Number(t.amount);
-                                // The archived record contains the split transportFee, so we subtract it to get the commissionable base.
-                                if(t.transportFee) baseAmount -= Number(t.transportFee);
-                                // We use the archived rate here to be consistent with the archived stats
-                                return (baseAmount * (therapistData.rate / 100)).toFixed(2);
-                            }
-                        }
-                    }
-                    return '0.00';
-                };
-
-                let dateStr = record.date;
-                try {
-                    const d = new Date(record.date);
-                    if (!isNaN(d.getTime())) {
-                        dateStr = d.toLocaleDateString();  
-                    }
-                } catch (e) {}
-
-                const rows = record.transactions.map(t => {
-                    const commissionAmount = getCommissionForTransaction(t, record.therapist_stats || {});
-
-                    return [
-                        `"${dateStr}"`,  
-                        `"${t.branch || 'N/A'}"`,  
-                        `"${t.time}"`,  
-                        `"${t.clientName || ''}"`, 
-                        `"${t.clientContact || ''}"`, 
-                        `"${t.description || ''}"`,  
-                        `"${t.service || t.category || ''}"`,  
-                        `"${t.duration || ''}"`,  
-                        `"${t.therapist || ''}"`,  
-                        `"${t.driver || ''}"`,  
-                        `"${t.location === 'home' ? 'Home Service' : 'In Spa'}"`,
-                        `"${t.room || ''}"`,  
-                        `"${t.paymentMethod || 'Cash'}"`, 
-                        `"${t.discountName || ''}"`, 
-                        Number(t.discountAmount || 0).toFixed(2), 
-                        Number(t.transportFee || 0).toFixed(2),
-                        Number(t.amount).toFixed(2),  
-                        commissionAmount,  
-                        t.status,  
-                        `"${t.recordedBy || 'System'}"`,
-                        `"${t.notes || ''}"`
-                    ];
-                });
-                
-                const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                link.download = `AtHome_Report_${record.date.replace(/,/g, '').replace(/ /g, '_')}.csv`;
-                link.click();
-            };
+            // Helper to get booking info for room management display
+            const getRoomBookingInfo = (roomName) => {
+                const status = roomStatuses[roomName];
+                if (status && status.status === 'occupied') {
+                    // Find the original transaction that checked this room in
+                    const bookingId = status.bookingId;
+                    const transaction = transactions.find(t => t.id === bookingId);
+                    
+                    return {
+                        clientName: transaction?.clientName || status.clientName || 'N/A',
+                        therapistName: transaction?.therapist || status.therapistName || 'N/A',
+                        checkInTime: status.checkInTime ? new Date(getMillis(status.checkInTime)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+                        bookingId: bookingId
+                    };
+                }
+                return null;
+            }
 
 
             // --- 4. ACTIONS ---
@@ -1452,6 +1485,30 @@
                         }
                     }));
                 }
+            };
+
+            // NEW: Toggle Room Selection
+            const toggleRoomSelection = (roomName) => {
+                const currentStatus = roomStatuses[roomName]?.status;
+                const roomAvailable = currentStatus !== 'occupied';
+
+                setSelectedRooms(prev => {
+                    const isSelected = prev.includes(roomName);
+                    
+                    if (isSelected) {
+                         // Allow unselecting regardless of status
+                        return prev.filter(r => r !== roomName);
+                    } else {
+                        // Only allow selecting if available
+                        if (roomAvailable) {
+                            return [...prev, roomName];
+                        } else {
+                            // Room is occupied and not currently selected
+                            setModal({ isOpen: true, type: 'alert', title: 'Room Occupied', message: `Room ${roomName} is currently occupied and unavailable for new selection.`, confirmColor: 'red', onConfirm: closeModal });
+                            return prev;
+                        }
+                    }
+                });
             };
             
             // Helper to apply discount calculation
@@ -1506,7 +1563,7 @@
                 const basePath = `artifacts/${fb.appId}/public/data`;
                 let collectionName = '';
                 let checkList = [];
-                const data = { name: trimmedItemName };
+                const data = { name: trimmedItemName, branch: user.currentBranch }; // Ensure new items are tagged with branch
 
                 if (listType === 'therapist') {
                     collectionName = 'therapists';
@@ -1549,7 +1606,17 @@
 
                 setIsGlobalLoading(true);
                 try {
-                    await fb.db.collection(`${basePath}/${collectionName}`).add(data);
+                    const docRef = await fb.db.collection(`${basePath}/${collectionName}`).add(data);
+
+                    // If a room is added, create its initial status record
+                    if (listType === 'room') {
+                        await fb.db.collection(`${basePath}/roomStatuses`).doc(trimmedItemName).set({
+                            status: 'available',
+                            branch: user.currentBranch,
+                            roomName: trimmedItemName,
+                            roomId: docRef.id
+                        });
+                    }
                 } catch (err) {
                     setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to add item.', confirmColor: 'red', onConfirm: closeModal });
                 } finally {
@@ -1557,14 +1624,106 @@
                 }
             };
 
+            // NEW: Room Check-in/Check-out logic
+            const handleRoomCheckInOut = async (roomName, action) => {
+                const basePath = `artifacts/${fb.appId}/public/data`;
+                const roomStatusRef = fb.db.collection(`${basePath}/roomStatuses`).doc(roomName);
+                
+                if (action === 'check_in') {
+                    // Filter completed in-spa transactions for today that are not yet assigned to this room
+                    const candidateTransactions = filteredTransactions.filter(t => 
+                        t.bookingDate === getTodayStr() && 
+                        t.status === 'completed' && 
+                        t.location === 'spa' &&
+                        (!t.room || t.room.split(', ').every(r => r !== roomName)) // Booking does not have this room assigned
+                    ).sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp)); 
+
+                    const transaction = candidateTransactions.find(t => true); // Take the latest eligible one
+
+                    if (!transaction) {
+                        setModal({ isOpen: true, type: 'alert', title: 'No Booking to Check In', message: `No completed in-spa booking found today that can be linked to Room ${roomName}.`, confirmColor: 'red', onConfirm: closeModal });
+                        return;
+                    }
+
+                    const currentStatus = roomStatuses[roomName]?.status;
+                    if (currentStatus === 'occupied') {
+                        setModal({ isOpen: true, type: 'alert', title: 'Room Occupied', message: `Room ${roomName} is already checked in.`, confirmColor: 'red', onConfirm: closeModal });
+                        return;
+                    }
+
+                    setIsGlobalLoading(true);
+                    try {
+                        // 1. Update Room Status
+                        await roomStatusRef.set({
+                            status: 'occupied',
+                            bookingId: transaction.id, 
+                            clientName: transaction.clientName,
+                            therapistName: transaction.therapist,
+                            checkInTime: firebase.firestore.FieldValue.serverTimestamp(),
+                            branch: user.currentBranch,
+                            roomName: roomName
+                        });
+                        
+                        // 2. Update Transaction (Assign the room to the existing booking record)
+                        const currentRoomList = transaction.room ? transaction.room.split(', ').filter(r => r.trim() !== '') : [];
+                        const updatedRoomList = [...new Set([...currentRoomList, roomName])].join(', ');
+
+                        await fb.db.collection(`${basePath}/transactions`).doc(transaction.id).update({
+                            room: updatedRoomList
+                        });
+
+                        setModal({ isOpen: true, type: 'alert', title: 'Checked In!', message: `Client ${transaction.clientName} checked into Room ${roomName}.`, confirmColor: 'logo-green', onConfirm: closeModal });
+
+                    } catch (error) {
+                        console.error("Check-in failed:", error);
+                        setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to check in room.', confirmColor: 'red', onConfirm: closeModal });
+                    } finally {
+                        setIsGlobalLoading(false);
+                    }
+
+                } else if (action === 'check_out') {
+                    setModal({
+                        isOpen: true,
+                        type: 'confirm',
+                        title: 'Confirm Check Out',
+                        message: `Are you sure you want to check out Room ${roomName}?`,
+                        confirmColor: 'red',
+                        onConfirm: async () => {
+                            closeModal();
+                            setIsGlobalLoading(true);
+                            try {
+                                // 1. Reset Room Status
+                                await roomStatusRef.update({
+                                    status: 'available',
+                                    bookingId: firebase.firestore.FieldValue.delete(),
+                                    clientName: firebase.firestore.FieldValue.delete(),
+                                    therapistName: firebase.firestore.FieldValue.delete(),
+                                    checkInTime: firebase.firestore.FieldValue.delete(),
+                                });
+
+                                // NOTE: We leave the room assigned to the transaction record for historical integrity.
+
+                                setModal({ isOpen: true, type: 'alert', title: 'Checked Out!', message: `Room ${roomName} is now available.`, confirmColor: 'logo-green', onConfirm: closeModal });
+                            } catch (error) {
+                                console.error("Check-out failed:", error);
+                                setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to check out room.', confirmColor: 'red', onConfirm: closeModal });
+                            } finally {
+                                setIsGlobalLoading(false);
+                            }
+                        }
+                    });
+                }
+            };
+
+
             const handleDeleteItem = (listType, id, name) => {
                 let collectionName = '';
                 if (listType === 'therapist') collectionName = 'therapists';
                 else if (listType === 'service') collectionName = 'services';
                 else if (listType === 'duration') collectionName = 'durations';
                 else if (listType === 'driver') collectionName = 'drivers';  
-                else if (listType === 'room') collectionName = 'rooms'; 
                 else if (listType === 'discount') collectionName = 'discounts'; // NEW
+                else if (listType === 'room') collectionName = 'rooms'; 
                 else return;
 
                 const basePath = `artifacts/${fb.appId}/public/data`;
@@ -1576,6 +1735,12 @@
                         setIsGlobalLoading(true);
                         try {
                             await fb.db.collection(`${basePath}/${collectionName}`).doc(id).delete();
+                            
+                            // If a room is deleted, delete its status too
+                            if (listType === 'room') {
+                                await fb.db.collection(`${basePath}/roomStatuses`).doc(name).delete().catch(err => console.warn("Failed to delete corresponding roomStatus:", err));
+                            }
+
                         } catch (error) {
                             setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Deletion failed.', confirmColor: 'red', onConfirm: closeModal });
                         } finally {
@@ -1619,6 +1784,7 @@
                 else return;
 
                 if (updatedData.name) {
+                    const oldItem = checkList.find(i => i.id === id);
                     const newName = updatedData.name.trim().toLowerCase();
                     const isDuplicate = checkList.some(item =>  
                         item.name.toLowerCase() === newName && item.id !== id
@@ -1643,120 +1809,49 @@
                     setIsGlobalLoading(false);
                 }
             };
-            
-            const handleDeleteHistory = (id, date) => {
-                if (user?.role !== 'admin') return;  
 
-                    setModal({
-                    isOpen: true, type: 'confirm', title: `Delete Report?`, message: `Are you sure you want to permanently delete the archived report for ${date}? This action cannot be undone.`, confirmColor: 'red',
-                    onConfirm: async () => {
-                        closeModal();
-                        setIsGlobalLoading(true);
-                        try {
-                            const basePath = `artifacts/${fb.appId}/public/data`;
-                            await fb.db.collection(`${basePath}/history`).doc(id).delete();
-                        } catch (err) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Could not delete history.', confirmColor: 'red', onConfirm: closeModal });
-                        } finally {
-                            setIsGlobalLoading(false);
-                        }
-                    }
-                });
-            };
-            
-            const handleLoginSubmit = async (e) => {
+            const handleUpdateProfile = async (e) => {
                 e.preventDefault();
-                if (!loginBranch) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Branch Required', message: 'Please select your branch location.', onConfirm: closeModal, confirmColor: 'red' });
-                    return;
-                }
                 
+                const newPin = profileData.pin;
+                const newUsername = profileData.username.trim();
+                const updateData = { username: newUsername };
+
                 setIsGlobalLoading(true);
                 try {
-                    const hashedPinAttempt = await hashPin(loginPin);
-                    if (!hashedPinAttempt) {
-                        setModal({ isOpen: true, type: 'alert', title: 'Login Error', message: 'PIN must be at least 4 digits.', onConfirm: closeModal, confirmColor: 'red' });
-                        return;
-                    }
+                    if (newPin && newPin.length > 0) {
+                        const requiredLen = user.role === 'admin' ? 6 : 4;  
+                        
+                        if (newPin.length !== requiredLen) {
+                             setModal({ isOpen: true, type: 'alert', title: 'Policy Check', message: `Your PIN must be exactly ${requiredLen} digits.`, onConfirm: closeModal, confirmColor: 'red' });
+                             return;
+                        }
 
-                    const found = users.find(u => u.username.toLowerCase() === loginUsername.toLowerCase() && u.pin === hashedPinAttempt);
-                    
-                    if (found) {
-                        if (loginBranch === 'ALL' && found.role !== 'admin') {  
-                            setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only the Owner Admin can access the All Branches view.', onConfirm: closeModal, confirmColor: 'red' });  
+                        const hashedPin = await hashPin(newPin);
+                        if (!hashedPin) {
+                            setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'New PIN hashing failed. Check PIN length.', onConfirm: closeModal, confirmColor: 'red' });
                             return;
                         }
-                        
-                        const loggedUser = { ...found, currentBranch: loginBranch };
-                        
-                        // FIX: Update currentBranch on user document upon successful login, but DO NOT update lastActive continuously
-                        const basePath = `artifacts/${fb.appId}/public/data`;
-                        await fb.db.collection(`${basePath}/users`).doc(found.id).update({  
-                            currentBranch: loginBranch,
-                            lastActive: firebase.firestore.FieldValue.serverTimestamp() // Initial login stamp only
-                        });
-
-                        setUser(loggedUser);
-                        localStorage.setItem('spa_user', JSON.stringify(loggedUser));
-                        setLoginUsername(''); setLoginPin(''); setLoginBranch(''); setView('dashboard');
-                    } else {
-                        setModal({ isOpen: true, type: 'alert', title: 'Login Failed', message: 'Check credentials.', onConfirm: closeModal, confirmColor: 'red' });
+                        updateData.pin = hashedPin;
                     }
+
+                    if (users.some(u => u.username.toLowerCase() === newUsername.toLowerCase() && u.id !== user.id)) {  
+                        setModal({ isOpen: true, type: 'alert', title: 'Username Taken', message: 'This username is already in use by another staff.', onConfirm: closeModal, confirmColor: 'red' });
+                        return;  
+                    }
+                    
+                    const basePath = `artifacts/${fb.appId}/public/data`;
+                    await fb.db.collection(`${basePath}/users`).doc(user.id).update(updateData);
+                    
+                    const updatedUser = { ...user, ...updateData };
+                    setUser(updatedUser);
+                    localStorage.setItem('spa_user', JSON.stringify(updatedUser));  
+                    setModal({ isOpen: true, type: 'alert', title: 'Updated', message: 'Credentials synced.', onConfirm: closeModal, confirmColor: 'logo-green' });
                 } catch (err) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Login processing error. Check connection.', onConfirm: closeModal, confirmColor: 'red' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to update profile.', confirmColor: 'red', onConfirm: closeModal });
                 } finally {
                     setIsGlobalLoading(false);
                 }
-            };
-
-            const calculatePrice = (serviceName, durationName, transport = 0) => {
-                let basePrice = 0;
-                
-                if (serviceName) {
-                    const foundService = servicesList.find(s => s.name === serviceName);
-                    if (foundService) {
-                        // Priority 1: Check multi-duration price map
-                        if (durationName && foundService.prices && foundService.prices[durationName]) {
-                            basePrice = Number(foundService.prices[durationName]);
-                        }  
-                    }
-                }
-                
-                return basePrice;
-            };
-
-            const handleServiceChange = (serviceName) => {
-                // This function is no longer really needed since the change is handled row-by-row, but kept for legacy/safety.
-                // It should be safe as it only updates an unused global field (formData.service)
-                setFormData({ ...formData, service: serviceName });
-            };
-            
-            const handleTransportChange = (val) => {
-                setFormData({ ...formData, transportFee: val });
-            };
-
-            const handleExpenseAmountChange = (val) => {
-                setFormData({ ...formData, amount: val });
-            };
-            
-            const toggleLocation = (loc) => {
-                let newTransport = formData.transportFee;
-                let newRoom = formData.room;
-
-                if (loc === 'spa') {
-                    newTransport = '';  
-                    setSelectedDrivers([]);
-                } else {
-                    newRoom = ''; 
-                }
-                
-                setFormData(prev => ({
-                    ...prev,
-                    location: loc,
-                    transportFee: newTransport,
-                    driver: '',
-                    room: newRoom, 
-                }));
             };
 
             const handleSubmit = async (e, typeOverride = null) => {
@@ -1770,14 +1865,14 @@
                 }
 
                 if (transactionType === 'expense') {
-                    if (!formData.amount || !formData.category || !formData.notes) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please provide Amount, Category, and Description (Notes) for the expense.', onConfirm: closeModal, confirmColor: 'red' });
-                            return;
-                    }
                     const expenseAmount = parseFloat(formData.amount);
-                     if (isNaN(expenseAmount) || expenseAmount <= 0) {
+                    if (isNaN(expenseAmount) || expenseAmount <= 0) {
                         setModal({ isOpen: true, type: 'alert', title: 'Invalid Amount', message: 'Expense amount must be a positive number.', onConfirm: closeModal, confirmColor: 'red' });
                         return;
+                    }
+                    if (!formData.category || !formData.notes) {
+                            setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please provide Category, and Description (Notes) for the expense.', onConfirm: closeModal, confirmColor: 'red' });
+                            return;
                     }
 
                 } else {
@@ -1792,6 +1887,12 @@
                             return;
                     }
                     
+                    // CRITICAL VALIDATION: Check Room Selection for In-Spa Service
+                    if (formData.location === 'spa' && selectedRooms.length === 0) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Missing Room', message: 'Please select at least one Room for In-Spa service.', onConfirm: closeModal, confirmColor: 'red' });
+                        return;
+                    }
+
                     // Validate individual rows and calculate total base price
                     let totalServicePrice = 0;
                     for (const name of selectedTherapists) {
@@ -1860,6 +1961,7 @@
                     const splitTransport = selectedTherapists.length > 0 ? (totalTransport / selectedTherapists.length) : 0;
                     
                     const driverString = selectedDrivers.length > 0 ? selectedDrivers.join(', ') : '';
+                    const roomString = selectedRooms.length > 0 ? selectedRooms.join(', ') : ''; // NEW: Multi-room string
 
                     selectedTherapists.forEach(thName => {
                         const row = therapistRows[thName];
@@ -1872,7 +1974,7 @@
                         // Final amount saved = discounted service price + split transport fee
                         const finalRowAmount = discountedServicePrice + splitTransport;
 
-                        // FIX: Calculate the proportional discount amount for this specific row
+                        // Calculate the proportional discount amount for this specific row
                         const proportionalDiscountAmount = rowServicePrice * effectiveDiscountRate;
 
 
@@ -1894,10 +1996,9 @@
                             location: formData.location || 'spa',
                             transportFee: splitTransport, 
                             driver: formData.location === 'home' ? driverString : '',
-                            room: formData.location === 'spa' ? formData.room : '',
+                            room: formData.location === 'spa' ? roomString : '', // Use multi-room string
                             paymentMethod: formData.paymentMethod, 
                             
-                            // FIXED: Save the discount name and the proportional discount amount for this specific record
                             discountName: discountName, 
                             discountAmount: proportionalDiscountAmount, 
                         });
@@ -1964,6 +2065,7 @@
                 });
                 setSelectedTherapists([]); 
                 setSelectedDrivers([]); 
+                setSelectedRooms([]); // Reset multi-room selection
                 setTherapistRows({}); 
                 setSelectedDiscountId(''); // Reset discount
             };
@@ -2252,7 +2354,7 @@
 
                 return (totalServicePrice - discountValue) + totalTransportFee;
             }, [selectedTherapists, therapistRows, formData.transportFee, selectedDiscountId, discountsList]);
-
+            
             // --- RENDER ---
 
             if (configError) return (
@@ -2335,6 +2437,8 @@
                             <button onClick={()=>setView('dashboard')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='dashboard'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.LayoutDashboard size={16}/> Daily</button>
                             <button onClick={()=>setView('add')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='add'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.Plus size={16}/> Booking</button>
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
+                            {user.currentBranch !== 'ALL' && <button onClick={()=>setView('rooms')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='rooms'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.DoorOpen size={16}/> Rooms</button>}
+
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
                             {user.role === 'admin' && <button onClick={()=>setView('lists')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='lists'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.ShieldCheck size={16}/> Lists</button>}
                             
@@ -2614,6 +2718,16 @@
                             </div>
                         )}
 
+                        {view === 'rooms' && user.currentBranch !== 'ALL' && (
+                            <RoomManagement 
+                                user={user}
+                                rooms={roomsList}
+                                roomStatuses={roomStatuses}
+                                onCheckInOut={handleRoomCheckInOut}
+                                getRoomBookingInfo={getRoomBookingInfo}
+                            />
+                        )}
+
                         {view === 'add' && (
                             <div className="bg-white rounded-2xl shadow-sm border border-logo-green-100 p-6 fade-in">
                                 <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Icons.Plus size={24} className="text-logo-green-700"/> New Booking/Sale</h2>
@@ -2669,17 +2783,48 @@
                                         </button>
                                     </div>
 
-                                    {/* Spa Specifics (Room Selection) */}
+                                    {/* Spa Specifics (Room Selection - Multi) */}
                                     {formData.location === 'spa' && (
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 animate-fadeIn">
-                                            <label className="text-xs font-bold text-slate-500 mb-1 block flex items-center gap-1"><Icons.DoorOpen size={12}/> Assigned Room</label>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 animate-fadeIn space-y-2">
+                                            <label className="text-xs font-bold text-slate-500 mb-1 block flex items-center gap-1"><Icons.DoorOpen size={12}/> Assigned Room(s)</label>
+                                            
+                                            {/* Selected Room Tags */}
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                                {selectedRooms.map(rName => (
+                                                    <span key={rName} className="bg-white text-logo-green-600 text-xs px-2 py-1 rounded-md border border-logo-green-200 flex items-center gap-1 font-bold shadow-sm">
+                                                        {rName}
+                                                        <button type="button" onClick={() => toggleRoomSelection(rName)} className="hover:text-red-500"><Icons.X size={12}/></button>
+                                                    </span>
+                                                ))}
+                                            </div>
+
                                             <select  
-                                                value={formData.room}  
-                                                onChange={e => setFormData({...formData, room: e.target.value})}
+                                                value="" // Must be empty to allow onChange to fire on selecting the same value
+                                                onChange={e => {
+                                                    if(e.target.value) toggleRoomSelection(e.target.value);
+                                                }}
                                                 className="w-full p-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-logo-green-500 bg-white appearance-none text-sm"
                                             >
-                                                <option value="">Select Room (Optional)</option>
-                                                {roomsList.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                                                <option value="">+ Add Room</option>
+                                                {roomsList.map(r => {
+                                                    const status = roomStatuses[r.name]?.status;
+                                                    const isOccupied = status === 'occupied';
+                                                    const isSelected = selectedRooms.includes(r.name);
+                                                    
+                                                    // Only show if not selected OR if selected (to allow unselection if needed)
+                                                    if (!isSelected && isOccupied) return null;
+
+                                                    return (
+                                                        <option 
+                                                            key={r.id} 
+                                                            value={r.name} 
+                                                            disabled={isOccupied && !isSelected}
+                                                            className={isOccupied ? 'text-red-500' : 'text-slate-700'}
+                                                        >
+                                                            {r.name} ({isOccupied ? 'Unavailable' : 'Available'})
+                                                        </option>
+                                                    );
+                                                })}
                                             </select>
                                             {roomsList.length === 0 && <p className="text-[10px] text-red-400 mt-1 italic">No rooms found. Add in Lists tab (Admin).</p>}
                                         </div>
@@ -2944,7 +3089,7 @@
                                         min="0.01"
                                         placeholder="Amount Spent (P)*"  
                                         value={formData.amount}
-                                        onChange={handleExpenseAmountChange}
+                                        onChange={e=>setFormData({...formData, amount:e.target.value})}
                                         className="w-full p-3 border rounded-xl bg-slate-50 border-red-300 font-bold"
                                     />
                                     
@@ -3013,7 +3158,7 @@
                                         return u.currentBranch === user.currentBranch;
                                     })
                                     .sort((a, b) => {
-                                        // Sort by Online status first (we no longer track real-time activity, so just sort by name)
+                                        // Sort by name
                                         return a.name.localeCompare(b.name);
                                     })
                                     .map(u=>(
@@ -3071,7 +3216,10 @@
                                 </div>
                                 <div className="bg-white rounded-xl shadow-sm border p-6">
                                     <h3 className="font-bold mb-4">Add Staff</h3>
-                                    <form onSubmit={handleAddUser} className="space-y-4">
+                                    <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        handleAddUser(e);
+                                    }} className="space-y-4">
                                         <input required placeholder="Name" value={newUser.name} onChange={e=>setNewUser({...newUser, name:e.target.value})} className="w-full p-2 border rounded"/>
                                         <input required placeholder="Username" value={newUser.username} onChange={e=>setNewUser({...newUser, username:e.target.value})} className="w-full p-2 border rounded"/>
                                         <div className="flex gap-2">
