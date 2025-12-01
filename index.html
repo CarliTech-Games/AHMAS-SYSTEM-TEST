@@ -12,15 +12,11 @@
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- FIXED: Pointing to UMD build for browser compatibility -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
-    <!-- Using Firebase Compatibility libraries for broader support -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         // Custom Tailwind Configuration to use the Logo's Primary Green (#008000)
         tailwind.config = {
@@ -28,13 +24,13 @@
                 extend: {
                     colors: {
                         'logo-green': {
-                            50: '#E6FFE6',        // Very light background
-                            100: '#CCFFCC',       // Light background
-                            500: '#00B300',       // Medium
-                            600: '#009900',       // Primary Button Hover
-                            700: '#008000',       // Base Logo Green / Primary
-                            800: '#006600',       // Darker text/header
-                            900: '#004C00',       // Deepest text
+                            50: '#E6FFE6',      // Very light background
+                            100: '#CCFFCC',      // Light background
+                            500: '#00B300',      // Medium
+                            600: '#009900',      // Primary Button Hover
+                            700: '#008000',      // Base Logo Green / Primary
+                            800: '#006600',      // Darker text/header
+                            900: '#004C00',      // Deepest text
                         },
                         'teal': {
                             600: '#008080', // Keep some teal accent for contrast
@@ -62,9 +58,13 @@
             border-width: 5px;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Map Container */
-        #map-container { height: 100%; width: 100%; z-index: 1; min-height: 500px; }
-        .custom-div-icon { background: transparent; border: none; }
+        /* Style for better appearance of select arrows in Tailwind */
+        select {
+            background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236B7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1.5em 1.5em;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -84,7 +84,7 @@
             'AS Fortuna'
         ];
 
-        // ADDED: Service Categories
+        // Service Categories
         const SERVICE_CATEGORIES = [
             'Specialized Massage',
             'Relax & Revive',
@@ -95,18 +95,18 @@
         
         // --- FIREBASE CONFIGURATION ---
         const MANUAL_FIREBASE_CONFIG = {
-            apiKey: "AIzaSyAKXcZwKtFBRFvGbOKd0UnQrLuOLt7wV9M",
-            authDomain: "ahmas-tracker.firebaseapp.com",
-            projectId: "ahmas-tracker",
-            storageBucket: "ahmas-tracker.firebasestorage.app",
-            messagingSenderId: "6650730194",
-            appId: "1:6650730194:web:eedf9c5bcb25cfe12ebf0b",
-            measurementId: "G-XW2GZJXN08"
+            apiKey: "AIzaSyAKfftJL6ZkFCdxVT5wyWWPqtvPd2eRLJk",
+            authDomain: "ahmas-system.firebaseapp.com",
+            databaseURL: "https://ahmas-system-default-rtdb.firebaseio.com",
+            projectId: "ahmas-system",
+            storageBucket: "ahmas-system.firebasestorage.app",
+            messagingSenderId: "3535933918",
+            appId: "1:3535933918:web:24eb6311bd0c49750b0d4f",
+            measurementId: "G-D8SXDWE6SW"
         };
         
         const firebaseConfig = MANUAL_FIREBASE_CONFIG;
         const currentAppId = firebaseConfig.projectId;
-
 
         // --- ICON COMPONENT ---
         const Icon = ({ name, size = 24, className = "", ...props }) => {
@@ -169,11 +169,11 @@
             Wallet: (p) => <Icon name="wallet" {...p} />,
             TrendingUp: (p) => <Icon name="trending-up" {...p} />,
             SteeringWheel: (p) => <Icon name="joystick" {...p} />, // Using joystick as proxy for steering wheel or car front
-            DoorOpen: (p) => <Icon name="door-open" {...p} />, // ADDED: Icon for Rooms
-            CreditCard: (p) => <Icon name="credit-card" {...p} />, // ADDED: Card
-            Smartphone: (p) => <Icon name="smartphone" {...p} />, // ADDED: GCash/Phone
-            Banknote: (p) => <Icon name="banknote" {...p} />, // ADDED: Cash
-            Landmark: (p) => <Icon name="landmark" {...p} />, // ADDED: Bank
+            DoorOpen: (p) => <Icon name="door-open" {...p} />, // Icon for Rooms
+            CreditCard: (p) => <Icon name="credit-card" {...p} />, // Card
+            Smartphone: (p) => <Icon name="smartphone" {...p} />, // GCash/Phone
+            Banknote: (p) => <Icon name="banknote" {...p} />, // Cash
+            Landmark: (p) => <Icon name="landmark" {...p} />, // Bank
             Map: (p) => <Icon name="map" {...p} />
         };
 
@@ -221,87 +221,13 @@
             </div>
         );
 
-// --- LIVE MAP COMPONENT ---
-        const LiveMap = ({ activeDrivers }) => {
-            const mapRef = useRef(null);
-            const mapInstanceRef = useRef(null);
-            const markersRef = useRef({});
-
-            useEffect(() => {
-                if (!mapRef.current) return;
-
-                // Initialize Map (Center on Cebu City)
-                if (!mapInstanceRef.current) {
-                    // L is the global variable from the Leaflet script imported earlier
-                    mapInstanceRef.current = L.map(mapRef.current).setView([10.3157, 123.8854], 12); 
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '&copy; OpenStreetMap contributors'
-                    }).addTo(mapInstanceRef.current);
-                }
-
-                const map = mapInstanceRef.current;
-
-                // Custom Icon
-                const carIcon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: `<div style="background-color:#008000;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 8px rgba(0,0,0,0.5); position:relative;">
-                            <div style="position:absolute; top:-25px; left:-50px; width:116px; text-align:center; font-weight:bold; font-size:10px; color:#006600; text-shadow:0 0 2px white; background: rgba(255,255,255,0.8); border-radius: 4px; padding: 2px;">Driver</div>
-                           </div>`,
-                    iconSize: [16, 16],
-                    iconAnchor: [8, 8]
-                });
-
-                // Update Markers
-                activeDrivers.forEach(driver => {
-                    if (driver.location && driver.location.lat && driver.location.lng) {
-                        const { lat, lng } = driver.location;
-                        const lastUpdate = driver.lastUpdated?.seconds ? driver.lastUpdated.seconds * 1000 : Date.now();
-                        const isStale = (Date.now() - lastUpdate) > 300000; 
-
-                        const popupContent = `
-                            <div style="text-align:center; min-width: 100px;">
-                                <h3 style="font-weight:bold; color:#333; margin:0;">${driver.name}</h3>
-                                <div style="font-size:10px; color:${isStale?'red':'green'}; margin-top:4px;">
-                                    ${isStale ? '⚠️ Signal Lost' : '🟢 Signal Active'}
-                                </div>
-                                <div style="font-size:9px; color:#999;">
-                                    Speed: ${Math.round(driver.speed || 0)} m/s
-                                </div>
-                            </div>
-                        `;
-
-                        if (markersRef.current[driver.id]) {
-                            markersRef.current[driver.id].setLatLng([lat, lng]);
-                            markersRef.current[driver.id].setPopupContent(popupContent);
-                        } else {
-                            const marker = L.marker([lat, lng], { icon: carIcon }).addTo(map);
-                            marker.bindPopup(popupContent);
-                            markersRef.current[driver.id] = marker;
-                        }
-                    }
-                });
-
-                // Cleanup
-                Object.keys(markersRef.current).forEach(id => {
-                    if (!activeDrivers.find(d => d.id === id)) {
-                        map.removeLayer(markersRef.current[id]);
-                        delete markersRef.current[id];
-                    }
-                });
-                // Fix map sizing glitch on tab switch
-                setTimeout(() => { map.invalidateSize(); }, 200);
-            }, [activeDrivers]);
-
-            return <div id="map-container" ref={mapRef}></div>;
-        };
         // --- List Management Component (Admin Only) ---
-        // ADDED: rooms prop and logic
-        const ListManagement = ({ therapists, services, durations, drivers, rooms, onAdd, onDelete, onEdit }) => {
+        const ListManagement = ({ therapists, services, durations, drivers, rooms, discounts, onAdd, onDelete, onEdit }) => {
             const [activeTab, setActiveTab] = useState('therapist');  
             
             // Add State
             const [newItemName, setNewItemName] = useState('');
-            const [newItemCategory, setNewItemCategory] = useState(SERVICE_CATEGORIES[0]); // ADDED: Service Category State
+            const [newItemCategory, setNewItemCategory] = useState(SERVICE_CATEGORIES[0]); 
             const [newItemPrices, setNewItemPrices] = useState({});  
             const [newItemCommission, setNewItemCommission] = useState('');  
             
@@ -311,6 +237,12 @@
             const [editPrices, setEditPrices] = useState({});
             const [editCommission, setEditCommission] = useState('');  
 
+            // Discount specific fields (re-using general states for simplicity in single component)
+            const [newDiscountType, setNewDiscountType] = useState('Percentage');
+            const [newDiscountValue, setNewDiscountValue] = useState('');
+            const [newDiscountCode, setNewDiscountCode] = useState('');
+
+
             const [modal, setModal] = useState({ isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red' });
             const closeModal = () => setModal({ ...modal, isOpen: false });
             
@@ -319,18 +251,34 @@
             const handleFormSubmit = (e) => {
                 e.preventDefault();
                 let extraData = null;
+
                 if (activeTab === 'service') {
                     if (durations.length === 0) return; 
-                    // ADDED: Include category in extraData
                     extraData = { prices: newItemPrices, category: newItemCategory };
                 } else if (activeTab === 'therapist') {
                     extraData = { commissionRate: parseFloat(newItemCommission) || 0 };
+                } else if (activeTab === 'discount') { 
+                    const discountValue = parseFloat(newDiscountValue);
+                    if (isNaN(discountValue) || discountValue <= 0) {
+                         setModal({ isOpen: true, type: 'alert', title: 'Invalid Value', message: 'Discount value must be a positive number.', onConfirm: closeModal, confirmColor: 'red' });
+                         return;
+                    }
+                    extraData = { 
+                        type: newDiscountType, 
+                        value: discountValue,
+                        code: newDiscountCode.trim() 
+                    };
+                } else if (activeTab === 'duration' || activeTab === 'driver' || activeTab === 'room') {
+                    // No extra data needed for these, just name
                 }
 
                 onAdd(activeTab, newItemName, extraData);
                 setNewItemName('');
                 setNewItemPrices({});
-                setNewItemCommission('');  
+                setNewItemCommission(''); 
+                setNewDiscountType('Percentage');
+                setNewDiscountValue('');
+                setNewDiscountCode('');
             };
             
             const startEdit = (item) => {
@@ -338,6 +286,13 @@
                 setEditName(item.name);
                 setEditPrices(item.prices || {});
                 setEditCommission(item.commissionRate !== undefined ? String(item.commissionRate) : '');  
+                
+                // Set discount edit fields
+                if (activeTab === 'discount') {
+                    setNewDiscountType(item.type || 'Percentage');
+                    setNewDiscountValue(String(item.value || 0));
+                    setNewDiscountCode(item.code || '');
+                }
             };
 
             const cancelEdit = () => {
@@ -345,15 +300,30 @@
                 setEditName('');
                 setEditPrices({});
                 setEditCommission('');
+                setNewDiscountType('Percentage');
+                setNewDiscountValue('');
+                setNewDiscountCode('');
             };
 
             const saveEdit = () => {
                 const updatedData = { name: editName.trim() };
                 if (activeTab === 'service') {
+                    const currentItem = services.find(s => s.id === editingId);
                     updatedData.prices = editPrices;
+                    updatedData.category = currentItem.category || 'Others'; 
                 } else if (activeTab === 'therapist') {  
                     updatedData.commissionRate = parseFloat(editCommission) || 0;
+                } else if (activeTab === 'discount') {
+                    const discountValue = parseFloat(newDiscountValue);
+                    if (isNaN(discountValue) || discountValue <= 0) {
+                         setModal({ isOpen: true, type: 'alert', title: 'Invalid Value', message: 'Discount value must be a positive number.', onConfirm: closeModal, confirmColor: 'red' });
+                         return;
+                    }
+                    updatedData.type = newDiscountType;
+                    updatedData.value = discountValue;
+                    updatedData.code = newDiscountCode.trim();
                 }
+                
                 onEdit(activeTab, editingId, updatedData);
                 setEditingId(null);
             };
@@ -362,12 +332,14 @@
                 const setter = isEdit ? setEditPrices : setNewItemPrices;
                 const current = isEdit ? editPrices : newItemPrices;
                 
-                if (!val) {
+                const numberVal = parseFloat(val);
+
+                if (!val || isNaN(numberVal) || numberVal < 0) {
                     const copy = { ...current };
                     delete copy[durationName];
                     setter(copy);
                 } else {
-                    setter({ ...current, [durationName]: parseFloat(val) });
+                    setter({ ...current, [durationName]: numberVal });
                 }
             };
 
@@ -391,10 +363,14 @@
                 currentList = drivers;
                 placeholderText = "Enter Driver Name";
                 icon = <Icons.Car size={18} />;
-            } else if (activeTab === 'room') { // ADDED
+            } else if (activeTab === 'room') { 
                 currentList = rooms;
                 placeholderText = "Enter Room Name/Number";
                 icon = <Icons.DoorOpen size={18} />;
+            } else if (activeTab === 'discount') { // NEW
+                currentList = discounts;
+                placeholderText = "Enter Discount Name (e.g. Senior Citizen)";
+                icon = <Icons.MinusCircle size={18} />;
             }
 
             return (
@@ -418,6 +394,9 @@
                         <button onClick={() => setActiveTab('service')} className={`flex-1 py-2 px-2 text-xs font-bold rounded-md flex items-center justify-center gap-1 min-w-[80px] ${activeTab==='service' ? 'bg-white shadow-sm text-logo-green-700' : 'text-slate-500'}`}>
                             <Icons.Sparkles size={14}/> Services
                         </button>
+                         <button onClick={() => setActiveTab('discount')} className={`flex-1 py-2 px-2 text-xs font-bold rounded-md flex items-center justify-center gap-1 min-w-[80px] ${activeTab==='discount' ? 'bg-white shadow-sm text-logo-green-700' : 'text-slate-500'}`}>
+                            <Icons.Tag size={14}/> Discounts
+                        </button>
                     </div>
 
                     {/* Add New Item */}
@@ -437,7 +416,7 @@
                             {/* Dynamic Price Inputs for Services */}
                             {activeTab === 'service' && (
                                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                    {/* ADDED: Category Selector */}
+                                    {/* Category Selector */}
                                     <div className="mb-3">
                                         <label className="text-xs font-bold text-slate-500 mb-1 block uppercase">Category</label>
                                         <select 
@@ -484,10 +463,52 @@
                                     />
                                 </div>
                             )}
+                            
+                            {/* Discount Inputs */}
+                            {activeTab === 'discount' && (
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 mb-1 block uppercase">Type</label>
+                                            <select
+                                                value={newDiscountType} 
+                                                onChange={e => setNewDiscountType(e.target.value)}
+                                                className="w-full p-2 border rounded-lg text-sm bg-white outline-none"
+                                            >
+                                                <option value="Percentage">Percentage (%)</option>
+                                                <option value="Fixed">Fixed Amount (P)</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-500 mb-1 block uppercase">Value</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                required
+                                                placeholder={newDiscountType === 'Percentage' ? 'Max 100' : 'Amount'}
+                                                className="w-full p-2 border rounded-lg text-sm outline-none"
+                                                value={newDiscountValue}
+                                                onChange={e => setNewDiscountValue(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <label className="text-xs font-bold text-slate-500 mb-1 block uppercase">Barcode/Code (Optional)</label>
+                                     <input 
+                                        type="text" 
+                                        placeholder="Enter discount code/barcode" 
+                                        className="w-full p-2 border rounded-lg text-sm outline-none"
+                                        value={newDiscountCode} 
+                                        onChange={e => setNewDiscountCode(e.target.value)}
+                                    />
+                                </div>
+                            )}
+
 
                             <button  
                                 type="submit"  
-                                disabled={isServiceAddDisabled} 
+                                disabled={isServiceAddDisabled}
                                 className={`w-full text-white p-3 rounded-lg font-bold transition shadow-sm ${
                                     isServiceAddDisabled
                                         ? 'bg-slate-400 cursor-not-allowed'
@@ -522,10 +543,16 @@
                                                 ) : (
                                                     <div className="flex flex-col">
                                                         <span className="text-slate-700 font-medium">{item.name}</span>
-                                                        {/* ADDED: Show Category in List */}
+                                                        {/* Show Category in List */}
                                                         {activeTab === 'service' && item.category && (
                                                             <span className="text-[10px] text-slate-400 uppercase">{item.category}</span>
                                                         )}
+                                                         {/* Show Discount Code and Type */}
+                                                         {activeTab === 'discount' && (
+                                                            <span className="text-[10px] text-slate-400">
+                                                                Code: <span className="font-mono text-slate-600">{item.code || 'N/A'}</span> • {item.type} {item.type === 'Percentage' ? `${item.value}%` : `P${item.value}`}
+                                                            </span>
+                                                         )}
                                                     </div>
                                                 )}
                                                 
@@ -601,9 +628,9 @@
                                                         </div>
                                                     ) : (
                                                         <div className="flex flex-wrap gap-2 mt-1">
-                                                                <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100 font-bold">
-                                                                    Commission: {item.commissionRate !== undefined ? `${item.commissionRate}%` : 'N/A'}
-                                                                </span>
+                                                            <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100 font-bold">
+                                                                Commission: {item.commissionRate !== undefined ? `${item.commissionRate}%` : 'N/A'}
+                                                            </span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -613,7 +640,7 @@
                             )}
                         </div>
                     </div>
-                      {modal.isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60"><div className="bg-white rounded-xl p-6 max-w-sm"><h3 className="font-bold mb-2">{modal.title}</h3><p className="mb-4 text-sm">{modal.message}</p><div className="flex gap-2 justify-end">{modal.type==='confirm'&&<button onClick={closeModal} className="px-4 py-2 text-slate-500">Cancel</button>}<button onClick={modal.onConfirm||closeModal} className={`px-4 py-2 rounded text-white ${modal.confirmColor==='red'?'bg-red-500':'bg-logo-green-600'}`}>Okay</button></div></div></div>}
+                    {modal.isOpen && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60"><div className="bg-white rounded-xl p-6 max-w-sm"><h3 className="font-bold mb-2">{modal.title}</h3><p className="mb-4 text-sm">{modal.message}</p><div className="flex gap-2 justify-end">{modal.type==='confirm'&&<button onClick={closeModal} className="px-4 py-2 text-slate-500">Cancel</button>}<button onClick={modal.onConfirm||closeModal} className={`px-4 py-2 rounded text-white ${modal.confirmColor==='red'?'bg-red-500':'bg-logo-green-600'}`}>Okay</button></div></div></div>}
                 </div>
             );
         };
@@ -640,7 +667,10 @@
                             <p className="font-mono text-logo-green-700 text-sm">@{targetUser.username}</p>
                         </div>
 
-                        <form onSubmit={handleResetPin} className="space-y-4">
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            handleResetPin(e);
+                        }} className="space-y-4">
                             <label className="block">
                                 <span className="text-sm font-semibold text-slate-700 block mb-1">Set New PIN ({requiredLen} Digits)</span>
                                 <input
@@ -658,7 +688,7 @@
                             <div className="flex justify-end gap-2 pt-2">
                                 <button  
                                     type="button"
-                                    onClick={() => setEditUserModal({ isOpen: false, user: null, newPin: '' })}  
+                                    onClick={() => closeEditUserModal()}  
                                     className="px-4 py-2 text-slate-500 rounded hover:bg-slate-100"
                                 >
                                     Cancel
@@ -684,7 +714,7 @@
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             const [dbReady, setDbReady] = useState(false);
             const [configError, setConfigError] = useState(null);  
-            const [isGlobalLoading, setIsGlobalLoading] = useState(false); 
+            const [isGlobalLoading, setIsGlobalLoading] = useState(false);  
 
             const [user, setUser] = useState(null);
             const [users, setUsers] = useState([]);
@@ -703,9 +733,9 @@
             const [therapistsList, setTherapistsList] = useState([]);
             const [servicesList, setServicesList] = useState([]);
             const [durationsList, setDurationsList] = useState([]);
-            const [driversList, setDriversList] = useState([]); 
-            const [roomsList, setRoomsList] = useState([]); // ADDED: Room List State
-            const [activeDrivers, setActiveDrivers] = useState([]);
+            const [driversList, setDriversList] = useState([]);  
+            const [roomsList, setRoomsList] = useState([]); 
+            const [discountsList, setDiscountsList] = useState([]); // NEW: Discounts List
             
             const [view, setView] = useState('dashboard');
             const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -725,25 +755,24 @@
             const [newUser, setNewUser] = useState({ name: '', username: '', pin: '', role: 'staff' });
             const [profileData, setProfileData] = useState({ username: '', pin: '' });
             
-            // Added expense-related fields and viewType
+            // Forms related to new booking
             const [formData, setFormData] = useState({
                 clientName: '',  
-                clientContact: '', 
+                clientContact: '',  
                 service: '',  
-                therapist: '',  
-                amount: '',  
                 duration: '',  
-                type: 'booking', 
+                amount: '',  
+                type: 'booking',  
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
                 notes: '',
-                category: '', 
-                bookingDate: getTodayStr(), 
-                location: 'spa', 
+                category: '',  
+                bookingDate: getTodayStr(),  
+                location: 'spa',  
                 transportFee: '',
                 driver: '',
                 room: '',
-                paymentMethod: 'Cash' // ADDED: Default to Cash
+                paymentMethod: 'Cash' 
             });
             const [modal, setModal] = useState({
                 isOpen: false, type: 'confirm', title: '', message: '', onConfirm: null, confirmColor: 'red'
@@ -754,13 +783,14 @@
             const closeModal = () => setModal({ ...modal, isOpen: false });
             const closeEditUserModal = () => setEditUserModal({ isOpen: false, user: null, newPin: '' });
             
-            // NEW: Multi-therapist state
+            // Multi-therapist/service state
             const [selectedTherapists, setSelectedTherapists] = useState([]);
-            // NEW: Multi-driver state
             const [selectedDrivers, setSelectedDrivers] = useState([]);
-            // NEW: Track details per therapist (Service/Price)
-            const [therapistRows, setTherapistRows] = useState({});
+            const [therapistRows, setTherapistRows] = useState({}); // Track service, duration, amount per therapist
 
+            // NEW: Discount State for Booking/Sale
+            const [selectedDiscountId, setSelectedDiscountId] = useState('');
+            
             // --- Activity Timer for Throttling ---
             const activityTimerRef = useRef(null);
             const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
@@ -834,6 +864,15 @@
                         
                         const auth = firebase.auth();
                         const db = firebase.firestore();
+
+                        // Enable offline persistence
+                        await db.enablePersistence().catch((err) => {
+                            if (err.code === 'failed-precondition') {
+                                console.log("Multiple tabs open, persistence disabled.");
+                            } else if (err.code === 'unimplemented') {
+                                console.log("Browser does not support persistence.");
+                            }
+                        });
 
                         await auth.signInAnonymously();
 
@@ -910,18 +949,22 @@
                 
                 let unsubTrans = () => {};
                 if (isTransactionListenerActive && view === 'dashboard') {
+                    // Optimized Query for Dashboard (filters by date first, then local client filters apply)
                     let query = getCollection('transactions');
                     if (dashboardDate) {
+                        // NOTE: Firestore queries must be on indexed fields. We assume 'bookingDate' is indexed.
                         query = query.where('bookingDate', '==', dashboardDate);
                     }
-
+                    
                     unsubTrans = query.onSnapshot((snapshot) => {
                             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            // Client-side sort to avoid complex indexing for order by timestamp
                             data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
                             setTransactions(data);
                             setDbReady(true);
                         }, (error) => console.error("Sync Error: Transactions", error));
                 } else if (view !== 'dashboard' && isTransactionListenerActive) {
+                    // Turn off listener when not on the dashboard to save reads
                     setIsTransactionListenerActive(false);
                 }
 
@@ -936,9 +979,9 @@
                         // Simple pin migration logic (kept from original)
                         const needsUpdate = data.filter(u => (u.username === 'admin' && u.pin.length < 20));
                         for (const u of needsUpdate) {
-                             if (u.pin === '8888' || u.pin === '888888') { 
-                                const hashedPin = await hashPin('888888'); 
-                                await getCollection('users').doc(u.id).update({ pin: hashedPin, role: 'admin' });  
+                             if (u.pin === '8888' || u.pin === '888888') {  
+                                 const hashedPin = await hashPin('888888');  
+                                 await getCollection('users').doc(u.id).update({ pin: hashedPin, role: 'admin' });  
                              }
                         }
                         setUsers(data);
@@ -967,14 +1010,14 @@
                         }));
                     });
 
-                // ADDED: Drivers Listener
+                // Drivers Listener
                 const unsubDrivers = getCollection('drivers')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setDriversList(data.sort((a, b) => a.name.localeCompare(b.name)));
                     }, (error) => console.error("Sync Error: Drivers", error));
 
-                // ADDED: Rooms Listener
+                // Rooms Listener
                 const unsubRooms = getCollection('rooms')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -986,18 +1029,14 @@
                             return a.name.localeCompare(b.name);
                         }));
                     }, (error) => console.error("Sync Error: Rooms", error));
+                    
+                // NEW: Discounts Listener
+                const unsubDiscounts = getCollection('discounts')
+                    .onSnapshot((snapshot) => {
+                        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setDiscountsList(data.sort((a, b) => a.name.localeCompare(b.name)));
+                    }, (error) => console.error("Sync Error: Discounts", error));
                 
-// --- NEW: Active Drivers Listener ---
-                const unsubActiveDrivers = db.collection('drivers')
-                    .where('status', '==', 'active')
-                    .onSnapshot(snapshot => {
-                        const drivers = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
-                        setActiveDrivers(drivers);
-                    }, (error) => console.error("Sync Error: Active Drivers", error));
-
                 return () => {  
                     unsubTrans();  
                     unsubUsers();  
@@ -1005,16 +1044,16 @@
                     unsubServices();
                     unsubDurations();
                     unsubDrivers();
-                    unsubRooms(); // Cleanup rooms
-                    unsubActiveDrivers();
+                    unsubRooms(); 
+                    unsubDiscounts(); // Cleanup discounts
                 };
-            }, [fb, fbUser, isTransactionListenerActive, view, dashboardDate]); 
+            }, [fb, fbUser, isTransactionListenerActive, view, dashboardDate]);  
 
 
             // --- 2b. LAZY LOAD HISTORY ---
             useEffect(() => {
                 if (!fb || !fbUser || view !== 'history') {
-                    if (history.length > 0) setHistory([]); 
+                    if (history.length > 0) setHistory([]);  
                     return;
                 }
                 
@@ -1032,7 +1071,7 @@
                     });
 
                 return () => unsub();
-            }, [fb, fbUser, view]); 
+            }, [fb, fbUser, view]);  
 
             // --- 2c. REAL-TIME USER ROLE SYNC ---
             useEffect(() => {
@@ -1056,12 +1095,12 @@
                     const basePath = `artifacts/${fb.appId}/public/data`;
                     fb.db.collection(`${basePath}/users`).doc(user.id).update({
                         lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-                        currentBranch: user.currentBranch 
+                        currentBranch: user.currentBranch  
                     }).catch(err => console.error("Presence update failed", err));
                 };
 
-                updatePresence(); 
-                const interval = setInterval(updatePresence, 60000); 
+                updatePresence();  
+                const interval = setInterval(updatePresence, 60000);  
 
                 return () => clearInterval(interval);
             }, [user, fb]);
@@ -1075,25 +1114,36 @@
 
             // --- 3. HELPERS ---
             
-            // ADDED: Helper to Group Services by Category
+            // Helper to Group Services by Category
             const groupedServices = useMemo(() => {
                 const groups = {};
                 // Initialize groups based on constants to ensure order
                 SERVICE_CATEGORIES.forEach(cat => groups[cat] = []);
                 
                 servicesList.forEach(s => {
-                    const cat = s.category || 'Others'; // Default to 'Others' if undefined
-                    if (!groups[cat]) {
-                        // If category not in standard list, put in 'Others' or create new group? 
-                        // Let's create new group to be safe, or just push to Others.
-                        // For now, let's force standard categories.
+                    const cat = s.category || 'Others'; 
+                    if (SERVICE_CATEGORIES.includes(cat)) {
+                        groups[cat].push(s);
+                    } else {
+                        // Fallback for custom categories, add them under 'Others' or dynamically create? Let's use 'Others'
                         if (groups['Others']) groups['Others'].push(s);
                         else groups[cat] = [s];
-                    } else {
-                        groups[cat].push(s);
                     }
                 });
-                return groups;
+                // Sort categories by index of constant array to maintain order, and then add any residual categories
+                const sortedGroups = SERVICE_CATEGORIES.reduce((acc, cat) => {
+                    if (groups[cat] && groups[cat].length > 0) {
+                        acc[cat] = groups[cat];
+                    }
+                    return acc;
+                }, {});
+                
+                // Add any non-standard categories if they somehow exist, though they should be mapped to 'Others' by logic above
+                Object.keys(groups).filter(cat => !SERVICE_CATEGORIES.includes(cat)).forEach(cat => {
+                     sortedGroups[cat] = groups[cat];
+                });
+
+                return sortedGroups;
             }, [servicesList]);
 
             const seedDefaultUsers = async (db, basePath) => {
@@ -1126,8 +1176,9 @@
             const formatCurrency = (val) => {
                 if (val === undefined || val === null || val === '') return '';
                 const isNegative = val < 0;
-                const formatted = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Math.abs(val));
-                return isNegative ? `(-${formatted})` : formatted;
+                // Use PH locale for PHP currency display
+                const formatted = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(val));
+                return isNegative ? `(${formatted})` : formatted;
             };
             
             const formatDate = (timestamp) => {
@@ -1150,13 +1201,15 @@
                     data = data.filter(t => t.recordedBy === user.name);
                 }
                 
-                if (view === 'dashboard') {
+                // Dashboard filter is already applied via Firestore listener in useEffect 2.
+                // We keep this filter just in case the listener is paused (isTransactionListenerActive=false)
+                if (view === 'dashboard' && dashboardDate) {
                     data = data.filter(t => {
-                        const recordDate = t.bookingDate || formatDate(t.timestamp); 
                         let recordDateStr = '';
                         if (t.bookingDate) {
-                            recordDateStr = t.bookingDate; 
+                            recordDateStr = t.bookingDate;  
                         } else {
+                            // Fallback to timestamp date if bookingDate is missing (older records)
                             const d = new Date(getMillis(t.timestamp));
                             recordDateStr = d.toISOString().split('T')[0];
                         }
@@ -1171,7 +1224,6 @@
 
             const stats = useMemo(() => {
                 const data = filteredTransactions;
-                const salesRevenue = data.filter(t => (t.status === 'completed' || t.status === 'pending') && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const completedRevenue = data.filter(t => t.status === 'completed' && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
                 const totalExpenses = data.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Math.abs(Number(curr.amount)), 0);
                 const pendingValue = data.filter(t => t.status === 'pending' && t.type !== 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
@@ -1180,12 +1232,12 @@
                 const netCash = completedRevenue - totalExpenses;
 
                 return {  
-                    totalRevenue: completedRevenue, 
+                    totalRevenue: completedRevenue,  
                     pendingValue,  
                     totalBookings,  
                     completedSales,
-                    totalExpenses, 
-                    netCash 
+                    totalExpenses,  
+                    netCash  
                 };
             }, [filteredTransactions]);
 
@@ -1219,7 +1271,7 @@
                         grouped[branch].netCash += amount;
                     } else if (t.type === 'expense') {
                         grouped[branch].totalExpenses += Math.abs(amount);
-                        grouped[branch].netCash += amount; 
+                        grouped[branch].netCash += amount;  
                     }
                 });
 
@@ -1229,7 +1281,7 @@
                     .sort((a, b) => {
                         const indexA = BRANCHES.indexOf(a.branch);
                         const indexB = BRANCHES.indexOf(b.branch);
-                        if (indexA === -1) return 1; 
+                        if (indexA === -1) return 1;  
                         if (indexB === -1) return -1;
                         return indexA - indexB;
                     });
@@ -1238,25 +1290,31 @@
 
             const therapistStats = useMemo(() => {
                 const grouped = {};
+                // Only consider completed bookings/sales for commission calculation
                 const commissionableTransactions = filteredTransactions.filter(t => t.type !== 'expense' && t.status === 'completed');
 
                 commissionableTransactions.forEach(t => {
                     const branch = t.branch || (user.currentBranch !== 'ALL' ? user.currentBranch : 'Unknown');
                     const name = t.therapist ? t.therapist.trim() : 'Unassigned';
                     
-                    if (!name) return;
+                    if (!name || name === 'Unassigned') return;
 
                     const therapist = therapistsList.find(th => th.name === name);
-                    const rate = therapist?.commissionRate || 0; 
+                    // Default to 0 commission rate if not found in list
+                    const rate = therapist?.commissionRate || 0;  
 
                     if (!grouped[branch]) grouped[branch] = {};
                     if (!grouped[branch][name]) grouped[branch][name] = { name, count: 0, amount: 0, commission: 0, rate };
                     
                     const amount = Number(t.amount);
                     let commissionableAmount = amount;
+                    
+                    // Subtract the *split* transport fee from the revenue before calculating commission, if applicable
                     if (t.transportFee) {
                         commissionableAmount = amount - Number(t.transportFee);
                     }
+                    
+                    if (commissionableAmount < 0) commissionableAmount = 0; // Prevent negative commission base
 
                     grouped[branch][name].count++;
                     grouped[branch][name].amount += commissionableAmount;
@@ -1294,11 +1352,7 @@
             }, [history, historyStartDate, historyEndDate, user]);
 
             const downloadCSV = (record) => {
-                // ADDED: Driver column to header
-                // ADDED: Client Contact column
-                // ADDED: Room column
-                // ADDED: Payment Method column
-                const headers = ['Date', 'Branch', 'Time', 'Client Name', 'Client Contact', 'Description', 'Service / Category', 'Duration', 'Therapist', 'Driver', 'Location', 'Room', 'Payment Method', 'Transport Fee', 'Total Amount', 'Commission Amount', 'Status', 'Recorded By', 'Notes'];  
+                const headers = ['Date', 'Branch', 'Time', 'Client Name', 'Client Contact', 'Description', 'Service / Category', 'Duration', 'Therapist', 'Driver', 'Location', 'Room', 'Payment Method', 'Discount Name', 'Discount Amount', 'Transport Fee (Split)', 'Total Amount (Inc. Split Fee)', 'Commission Amount', 'Status', 'Recorded By', 'Notes'];  
                 
                 const getCommissionForTransaction = (t, therapistStatsArchive) => {
                     if (t.type !== 'expense' && t.status !== 'pending' && t.therapist) {
@@ -1309,20 +1363,24 @@
                             const therapistData = therapistStatsArchive[branch].find(s => s.name === therapistName);
                             if (therapistData) {
                                 let baseAmount = Number(t.amount);
-                                // Transport fee is already split in the DB record, but we subtract it just to be safe if logic matches
+                                // The archived record contains the split transportFee, so we subtract it to get the commissionable base.
                                 if(t.transportFee) baseAmount -= Number(t.transportFee);
-                                return baseAmount * (therapistData.rate / 100);
+                                // NOTE: The commissionable base here should be AFTER the discount, but since we save the post-discount amount in `t.amount`
+                                // and the split transport fee is already small, we rely on the final archived commission stats
+                                // which calculates the commission based on the saved service price in the archived transaction.
+                                // We rely on the archived therapistStats for the correct rate in this CSV utility.
+                                return (baseAmount * (therapistData.rate / 100)).toFixed(2);
                             }
                         }
                     }
-                    return 0;
+                    return '0.00';
                 };
 
                 let dateStr = record.date;
                 try {
                     const d = new Date(record.date);
                     if (!isNaN(d.getTime())) {
-                        dateStr = d.toLocaleDateString(); 
+                        dateStr = d.toLocaleDateString();  
                     }
                 } catch (e) {}
 
@@ -1333,19 +1391,21 @@
                         `"${dateStr}"`,  
                         `"${t.branch || 'N/A'}"`,  
                         `"${t.time}"`,  
-                        `"${t.clientName || ''}"`, // Client Name
-                        `"${t.clientContact || ''}"`, // ADDED: Client Contact
-                        `"${t.description || ''}"`, 
-                        `"${t.service || t.category || ''}"`, 
+                        `"${t.clientName || ''}"`, 
+                        `"${t.clientContact || ''}"`, 
+                        `"${t.description || ''}"`,  
+                        `"${t.service || t.category || ''}"`,  
                         `"${t.duration || ''}"`,  
-                        `"${t.therapist || ''}"`, 
-                        `"${t.driver || ''}"`, 
+                        `"${t.therapist || ''}"`,  
+                        `"${t.driver || ''}"`,  
                         `"${t.location === 'home' ? 'Home Service' : 'In Spa'}"`,
-                        `"${t.room || ''}"`, 
-                        `"${t.paymentMethod || 'Cash'}"`, // ADDED: Payment Method
-                        t.transportFee || '0',
-                        t.amount, 
-                        commissionAmount.toFixed(2), 
+                        `"${t.room || ''}"`,  
+                        `"${t.paymentMethod || 'Cash'}"`, 
+                        `"${t.discountName || ''}"`, // NEW: Discount Name
+                        Number(t.discountAmount || 0).toFixed(2), // NEW: Discount Amount
+                        Number(t.transportFee || 0).toFixed(2),
+                        Number(t.amount).toFixed(2),  
+                        commissionAmount,  
                         t.status,  
                         `"${t.recordedBy || 'System'}"`,
                         `"${t.notes || ''}"`
@@ -1376,16 +1436,36 @@
                 } else {
                     // Add
                     setSelectedTherapists(prev => [...prev, name]);
-                    // Initialize this therapist's row with the current global form values as defaults
+                    // Initialize this therapist's row with the first available duration/service combination 
+                    // or default to empty strings if lists are unavailable.
+                    const defaultDurationName = durationsList[0]?.name || '';
+                    const defaultServiceName = servicesList[0]?.name || '';
+                    const basePrice = calculatePrice(defaultServiceName, defaultDurationName, 0); 
                     setTherapistRows(prev => ({
                         ...prev,
                         [name]: {
-                            service: formData.service,
-                            duration: formData.duration, 
-                            amount: formData.amount 
+                            service: defaultServiceName,
+                            duration: defaultDurationName,  
+                            amount: basePrice 
                         }
                     }));
                 }
+            };
+            
+            // Helper to apply discount calculation
+            const getAppliedDiscountValue = (totalServicePrice) => {
+                if (!selectedDiscountId || totalServicePrice <= 0) return 0;
+                
+                const discount = discountsList.find(d => d.id === selectedDiscountId);
+                if (!discount || !discount.value || discount.value <= 0) return 0;
+                
+                if (discount.type === 'Percentage') {
+                    const rate = Math.min(100, discount.value) / 100;
+                    return totalServicePrice * rate;
+                } else if (discount.type === 'Fixed') {
+                    return Math.min(totalServicePrice, discount.value);
+                }
+                return 0;
             };
 
             // Helper to handle adding/removing drivers
@@ -1405,19 +1485,18 @@
                     
                     // Recalculate price if service or duration changes
                     if (field === 'service' || field === 'duration') {
-                        // Use the new value for the changed field, or existing/default for the other
-                        const sName = field === 'service' ? value : (updatedRow.service || formData.service);
-                        const dName = field === 'duration' ? value : (updatedRow.duration || formData.duration);
+                        const sName = field === 'service' ? value : (updatedRow.service || '');
+                        const dName = field === 'duration' ? value : (updatedRow.duration || '');
                         
-                        const newPrice = calculatePrice(sName, dName, 0); // 0 transport (raw service price)
-                        updatedRow.amount = newPrice;
+                        // Calculate only the RAW service price (0 transport)
+                        updatedRow.amount = calculatePrice(sName, dName, 0);
                     }
 
                     return { ...prev, [name]: updatedRow };
                 });
             };
 
-            // ADDED: Logic for listType === 'driver'
+            // ADDED: Logic for room and driver listType (includes new discount logic)
             const handleAddItem = async (listType, itemName, extraData = null) => {
                 const trimmedItemName = itemName.trim();
                 if (!trimmedItemName) return;
@@ -1434,24 +1513,29 @@
                 } else if (listType === 'service') {
                     collectionName = 'services';
                     checkList = servicesList;
-                    // UPDATED: Handle extraData which now contains prices AND category
                     if (extraData) {
-                        if (extraData.prices || extraData.category) {
-                            data.prices = extraData.prices || {};
-                            data.category = extraData.category || 'Others';
-                        } else {
-                            data.prices = extraData; // Fallback
-                        }
-                    } 
+                        data.prices = extraData.prices || {};
+                        data.category = extraData.category || 'Others';
+                    }  
                 } else if (listType === 'duration') {
                     collectionName = 'durations';
                     checkList = durationsList;
                 } else if (listType === 'driver') {
                     collectionName = 'drivers';
                     checkList = driversList;
-                } else if (listType === 'room') { // ADDED
+                } else if (listType === 'room') { 
                     collectionName = 'rooms';
                     checkList = roomsList;
+                } else if (listType === 'discount') { // NEW
+                    collectionName = 'discounts';
+                    checkList = discountsList;
+                    if (extraData) {
+                         Object.assign(data, extraData);
+                    }
+                    if (data.code && checkList.some(item => item.code && item.code.toLowerCase() === data.code.toLowerCase())) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Duplicate Code', message: `The code "${data.code}" is already in use.`, onConfirm: closeModal, confirmColor: 'red' });
+                        return;
+                    }
                 } else {
                     return;
                 }
@@ -1476,8 +1560,9 @@
                 if (listType === 'therapist') collectionName = 'therapists';
                 else if (listType === 'service') collectionName = 'services';
                 else if (listType === 'duration') collectionName = 'durations';
-                else if (listType === 'driver') collectionName = 'drivers'; 
-                else if (listType === 'room') collectionName = 'rooms'; // ADDED
+                else if (listType === 'driver') collectionName = 'drivers';  
+                else if (listType === 'room') collectionName = 'rooms'; 
+                else if (listType === 'discount') collectionName = 'discounts'; // NEW
                 else return;
 
                 const basePath = `artifacts/${fb.appId}/public/data`;
@@ -1485,7 +1570,7 @@
                 setModal({
                     isOpen: true, type: 'confirm', title: `Delete ${listType}?`, message: `Are you sure you want to permanently delete "${name}"?`, confirmColor: 'red',
                     onConfirm: async () => {
-                        closeModal(); 
+                        closeModal();  
                         setIsGlobalLoading(true);
                         try {
                             await fb.db.collection(`${basePath}/${collectionName}`).doc(id).delete();
@@ -1517,9 +1602,17 @@
                     collectionName = 'drivers';
                     checkList = driversList;
                 }
-                else if (listType === 'room') { // ADDED
+                else if (listType === 'room') { 
                     collectionName = 'rooms';
                     checkList = roomsList;
+                }
+                else if (listType === 'discount') { // NEW
+                    collectionName = 'discounts';
+                    checkList = discountsList;
+                    if (updatedData.code && checkList.some(item => item.code && item.code.toLowerCase() === updatedData.code.toLowerCase() && item.id !== id)) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Duplicate Code', message: `The code "${updatedData.code}" is already in use.`, onConfirm: closeModal, confirmColor: 'red' });
+                        return;
+                    }
                 }
                 else return;
 
@@ -1533,7 +1626,7 @@
                         setModal({ isOpen: true, type: 'alert', title: 'Duplicate Name', message: `The name "${updatedData.name}" is already in use by another ${listType}.`, onConfirm: closeModal, confirmColor: 'red' });
                         return;
                     }
-                    updatedData.name = newName.charAt(0).toUpperCase() + newName.slice(1); 
+                    updatedData.name = newName.charAt(0).toUpperCase() + newName.slice(1);  
                 }
 
                 const basePath = `artifacts/${fb.appId}/public/data`;
@@ -1619,36 +1712,27 @@
                 if (serviceName) {
                     const foundService = servicesList.find(s => s.name === serviceName);
                     if (foundService) {
+                        // Priority 1: Check multi-duration price map
                         if (durationName && foundService.prices && foundService.prices[durationName]) {
-                            basePrice = foundService.prices[durationName];
-                        } 
-                        else if (foundService.price) {
-                            basePrice = foundService.price;
-                        }
+                            basePrice = Number(foundService.prices[durationName]);
+                        }  
                     }
                 }
                 
-                return basePrice + Number(transport);
+                return basePrice;
             };
 
             const handleServiceChange = (serviceName) => {
-                const newPrice = calculatePrice(serviceName, formData.duration, formData.transportFee);
-                setFormData({ ...formData, service: serviceName, amount: newPrice });
-                
-                // Optional: Update all existing rows if user changes main dropdown? 
-                // Let's NOT do that to preserve customizations. Main dropdown acts as default for NEW selections.
+                setFormData({ ...formData, service: serviceName });
             };
 
-            const handleDurationChange = (durationName) => {
-                // Just update global default, don't overwrite existing rows to allow mixed durations
-                const newPrice = calculatePrice(formData.service, durationName, formData.transportFee);
-                setFormData({ ...formData, duration: durationName, amount: newPrice });
-            };
+            // NOTE: handleDurationChange removed as it is no longer used globally
+            // const handleDurationChange = (durationName) => {
+            //     setFormData({ ...formData, duration: durationName });
+            // };
             
             const handleTransportChange = (val) => {
-                const transport = parseFloat(val) || 0;
-                const newPrice = calculatePrice(formData.service, formData.duration, transport);
-                setFormData({ ...formData, transportFee: val, amount: newPrice });
+                setFormData({ ...formData, transportFee: val });
             };
             
             const toggleLocation = (loc) => {
@@ -1657,22 +1741,19 @@
                 let newRoom = formData.room;
 
                 if (loc === 'spa') {
-                    newTransport = ''; 
-                    newDriver = ''; // Reset driver if in spa
+                    newTransport = '';  
+                    newDriver = ''; 
+                    setSelectedDrivers([]);
                 } else {
-                    newRoom = ''; // Reset room if home service
+                    newRoom = ''; 
                 }
                 
-                const transportVal = loc === 'spa' ? 0 : (parseFloat(newTransport) || 0);
-                const newPrice = calculatePrice(formData.service, formData.duration, transportVal);
-
                 setFormData({
                     ...formData,
                     location: loc,
                     transportFee: newTransport,
-                    driver: newDriver,
-                    room: newRoom, // Update room
-                    amount: newPrice
+                    driver: newDriver, 
+                    room: newRoom, 
                 });
             };
 
@@ -1681,7 +1762,7 @@
                 const transactionType = typeOverride || formData.type;
                 const transactionBranch = user.currentBranch === 'ALL' ? formData.targetBranch : user.currentBranch;
 
-                if (user.currentBranch === 'ALL' && !formData.targetBranch) {
+                if (!transactionBranch || (user.currentBranch === 'ALL' && !formData.targetBranch)) {
                     setModal({ isOpen: true, type: 'alert', title: 'Missing Branch', message: 'Please select a Target Branch.', onConfirm: closeModal, confirmColor: 'red' });
                     return;
                 }
@@ -1692,24 +1773,32 @@
                             return;
                     }
                 } else {
-                    // Updated Validation for Multi-Therapist (Simplified)
+                    // Booking/Sale Validation
                     if (!formData.clientName) {
-                         setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please enter a Client Name.', onConfirm: closeModal, confirmColor: 'red' });
-                         return;
+                            setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please enter a Client Name.', onConfirm: closeModal, confirmColor: 'red' });
+                            return;
                     }
 
                     if (selectedTherapists.length === 0) {
-                         setModal({ isOpen: true, type: 'alert', title: 'Missing Therapist', message: 'Please add at least one Therapist.', onConfirm: closeModal, confirmColor: 'red' });
-                         return;
+                            setModal({ isOpen: true, type: 'alert', title: 'Missing Therapist', message: 'Please add at least one Therapist.', onConfirm: closeModal, confirmColor: 'red' });
+                            return;
                     }
                     
-                    // Validate individual rows
+                    // Validate individual rows and calculate total base price
+                    let totalServicePrice = 0;
                     for (const name of selectedTherapists) {
                         const row = therapistRows[name];
-                        if (!row || !row.service || !row.amount || !row.duration) {
-                            setModal({ isOpen: true, type: 'alert', title: 'Missing Details', message: `Please ensure Service, Duration, and Price are set for therapist ${name}.`, onConfirm: closeModal, confirmColor: 'red' });
+                        const rowPrice = parseFloat(row?.amount) || 0;
+                        if (!row || !row.service || !row.duration || rowPrice <= 0) {
+                            setModal({ isOpen: true, type: 'alert', title: 'Missing Details', message: `Please ensure Service, Duration, and a valid Price (P>0) are set for therapist ${name}.`, onConfirm: closeModal, confirmColor: 'red' });
                             return;
                         }
+                        totalServicePrice += rowPrice;
+                    }
+                    
+                    if (totalServicePrice <= 0) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Invalid Total', message: 'The total service amount must be greater than P0.00.', onConfirm: closeModal, confirmColor: 'red' });
+                        return;
                     }
 
                     // Conflict Check (Loop through all selected therapists)
@@ -1718,7 +1807,7 @@
                         return allBookings.some(t =>  
                             t.therapist === thName &&  
                             t.time === formData.time &&
-                            (t.bookingDate || formatDate(t.timestamp)) === formData.bookingDate && 
+                            (t.bookingDate || formatDate(t.timestamp)) === formData.bookingDate &&  
                             t.type !== 'expense'
                         );
                     });
@@ -1734,75 +1823,92 @@
                     baseAmount = -Math.abs(baseAmount);
                 }
 
-                // Prepare list of transactions to save
+                // --- DISCOUNT CALCULATION ---
+                const totalServicePrice = selectedTherapists.reduce((acc, name) => acc + (parseFloat(therapistRows[name]?.amount) || 0), 0);
+                const discountAmount = getAppliedDiscountValue(totalServicePrice);
+                const appliedDiscountData = discountsList.find(d => d.id === selectedDiscountId);
+                const discountName = appliedDiscountData ? appliedDiscountData.name : null;
+                
+                // If a discount is applied, calculate the effective discount rate to split the discount proportionally
+                const effectiveDiscountRate = totalServicePrice > 0 ? (discountAmount / totalServicePrice) : 0;
+
+                // --- TRANSACTION PREPARATION ---
                 const transactionsToSave = [];
                 
                 if (transactionType === 'expense') {
                     transactionsToSave.push({
-                        clientName: formData.category, 
-                        description: formData.notes, 
-                        category: formData.category, 
+                        clientName: formData.category,  
+                        description: formData.notes,  
+                        category: formData.category,  
                         amount: baseAmount,
                         type: transactionType,
                         status: 'completed',
                         time: formData.time,
-                        bookingDate: formData.bookingDate, 
+                        bookingDate: formData.bookingDate,  
                         recordedBy: user.name,
                         branch: transactionBranch,
                         notes: formData.notes.trim(),
-                        location: formData.location || 'spa'
+                        location: formData.location || 'spa',
+                        paymentMethod: formData.paymentMethod
                     });
                 } else {
                     // Booking/Sale Logic
-                    // We split the Transport Fee across therapists to avoid inflating the total revenue in stats
                     const totalTransport = parseFloat(formData.transportFee) || 0;
                     const splitTransport = selectedTherapists.length > 0 ? (totalTransport / selectedTherapists.length) : 0;
                     
-                    // Create driver string
                     const driverString = selectedDrivers.length > 0 ? selectedDrivers.join(', ') : '';
 
                     selectedTherapists.forEach(thName => {
                         const row = therapistRows[thName];
-                        // Row amount is the Service Price. We add splitTransport to it for the record.
-                        const rowServicePrice = parseFloat(row.amount);
-                        const finalRowAmount = rowServicePrice + splitTransport;
+                        
+                        const rowServicePrice = parseFloat(row.amount) || 0;
+                        
+                        // Apply proportional discount to the service price only
+                        const discountedServicePrice = rowServicePrice * (1 - effectiveDiscountRate);
+                        
+                        // Final amount saved = discounted service price + split transport fee
+                        const finalRowAmount = discountedServicePrice + splitTransport;
 
                         transactionsToSave.push({
-                            clientName: formData.clientName, 
-                            clientContact: formData.clientContact, 
-                            description: formData.notes, 
-                            service: row.service, 
+                            clientName: formData.clientName,  
+                            clientContact: formData.clientContact,  
+                            description: formData.notes,  
+                            service: row.service,  
                             therapist: thName,
-                            amount: finalRowAmount, 
-                            duration: row.duration, 
+                            amount: finalRowAmount,  
+                            duration: row.duration,  
                             type: transactionType,
                             status: transactionType === 'sale' ? 'completed' : 'pending',
                             time: formData.time,
-                            bookingDate: formData.bookingDate, 
+                            bookingDate: formData.bookingDate,  
                             recordedBy: user.name,
                             branch: transactionBranch,
                             notes: formData.notes.trim(),
                             location: formData.location || 'spa',
-                            transportFee: splitTransport, // Split fee
+                            transportFee: splitTransport, 
                             driver: formData.location === 'home' ? driverString : '',
                             room: formData.location === 'spa' ? formData.room : '',
-                            paymentMethod: formData.paymentMethod // ADDED: Save payment method
+                            paymentMethod: formData.paymentMethod, 
+                            // Save discount details to the *first* transaction or all for completeness
+                            discountName: discountName, 
+                            discountAmount: discountAmount, 
                         });
                     });
                 }
 
+                // --- SAVE / SYNC LOGIC ---
+
                 if (!isOnline) {
                     const offlineItems = transactionsToSave.map(t => ({
                         ...t,
-                        localId: Date.now() + Math.random(), 
-                        timestamp: Date.now() 
+                        localId: Date.now() + Math.random(),  
+                        timestamp: Date.now()  
                     }));
                     
                     setOfflineQueue(prev => [...prev, ...offlineItems]);
                     
-                    // Reset Form
                     resetForm(transactionBranch);
-                    setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionsToSave.length} records queued.`, onConfirm: closeModal, confirmColor: 'orange' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionsToSave.length} records queued. They will sync automatically when online.`, onConfirm: closeModal, confirmColor: 'orange' });
                     return;
                 }
 
@@ -1810,7 +1916,6 @@
                 try {
                     const basePath = `artifacts/${fb.appId}/public/data`;
                     
-                    // Batch writes using Promise.all
                     const promises = transactionsToSave.map(t => fb.db.collection(`${basePath}/transactions`).add({
                         ...t,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp()
@@ -1822,7 +1927,7 @@
                     
                     setModal({ isOpen: true, type: 'alert', title: 'Saved!', message: `${transactionsToSave.length} record(s) saved for ${transactionBranch}.`, onConfirm: closeModal, confirmColor: 'logo-green' });
 
-                    setDashboardDate(formData.bookingDate); // Update view to booking date
+                    setDashboardDate(formData.bookingDate); 
                     setView('dashboard');
                 } catch (error) {
                     setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to save. Check connection.', onConfirm: closeModal, confirmColor: 'red' });
@@ -1839,15 +1944,16 @@
                     targetBranch: resetTargetBranch, notes: '', category: '',
                     bookingDate: new Date().toISOString().split('T')[0],
                     location: 'spa', transportFee: '', driver: '', room: '',
-                    paymentMethod: 'Cash' // Reset to Cash
+                    paymentMethod: 'Cash' 
                 });
-                setSelectedTherapists([]); // Clear selection
-                setSelectedDrivers([]); // Clear drivers
-                setTherapistRows({}); // Clear rows
+                setSelectedTherapists([]); 
+                setSelectedDrivers([]); 
+                setTherapistRows({}); 
+                setSelectedDiscountId(''); // Reset discount
             };
 
             const toggleStatus = async (t) => {
-                if (t.type === 'expense') return; 
+                if (t.type === 'expense') return;  
 
                 const basePath = `artifacts/${fb.appId}/public/data`;
                 const newStatus = t.status === 'pending' ? 'completed' : 'pending';
@@ -1911,7 +2017,7 @@
                             const transColl = fb.db.collection(`${basePath}/transactions`);
 
                             await historyColl.add({
-                                date: dashboardDate, 
+                                date: dashboardDate,  
                                 date_formatted: new Date(dashboardDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
                                 timestamp: new Date().toLocaleString(),
                                 timestamp_val: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1927,6 +2033,7 @@
                             await Promise.all(deletePromises);
 
                             setView('dashboard');  
+                            setDashboardDate(getTodayStr()); // Reset view date to today after archiving
                             setModal({ isOpen: true, type: 'alert', title: 'Shift Closed!', message: `Shift transactions successfully archived.`, confirmColor: 'logo-green', onConfirm: closeModal });
 
                         } catch (error) {
@@ -2074,7 +2181,7 @@
                     
                     const updatedUser = { ...user, ...updateData };
                     setUser(updatedUser);
-                    localStorage.setItem('spa_user', JSON.stringify(updatedUser)); 
+                    localStorage.setItem('spa_user', JSON.stringify(updatedUser));  
                     setModal({ isOpen: true, type: 'alert', title: 'Updated', message: 'Credentials synced.', onConfirm: closeModal, confirmColor: 'logo-green' });
                 } catch (err) {
                     setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to update profile.', confirmColor: 'red', onConfirm: closeModal });
@@ -2121,6 +2228,16 @@
                     resetActivityTimer();
                 }
             };
+            
+            // Calculate Total Estimated Price for display in the form
+            const totalEstimatedPrice = useMemo(() => {
+                const totalServicePrice = selectedTherapists.reduce((acc, name) => acc + (parseFloat(therapistRows[name]?.amount) || 0), 0);
+                const totalTransportFee = parseFloat(formData.transportFee) || 0;
+                
+                const discountValue = getAppliedDiscountValue(totalServicePrice);
+
+                return (totalServicePrice - discountValue) + totalTransportFee;
+            }, [selectedTherapists, therapistRows, formData.transportFee, selectedDiscountId, discountsList]);
 
             // --- RENDER ---
 
@@ -2203,7 +2320,6 @@
                         <div className="flex p-1 bg-slate-200/60 rounded-xl mb-6 sticky top-[70px] z-10 backdrop-blur-sm overflow-x-auto">
                             <button onClick={()=>setView('dashboard')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='dashboard'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.LayoutDashboard size={16}/> Daily</button>
                             <button onClick={()=>setView('add')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='add'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.Plus size={16}/> Booking</button>
-                            <button onClick={()=>setView('map')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='map'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.Map size={16}/> Map</button>
                             <button onClick={()=>setView('expense')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='expense'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.MinusCircle size={16}/> Expense</button>
                             <button onClick={()=>setView('profile')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='profile'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.UserCog size={16}/> Profile</button>
                             {user.role === 'admin' && <button onClick={()=>setView('lists')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='lists'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'}`}><Icons.ShieldCheck size={16}/> Lists</button>}
@@ -2259,39 +2375,39 @@
                                 {/* NEW: ALL BRANCH SUMMARY (Owner Admin only) */}
                                 {user.currentBranch === 'ALL' && user.role === 'admin' && branchFinancials && branchFinancials.length > 0 && (  
                                     <div className="bg-white p-4 rounded-xl shadow-lg border border-teal-100 space-y-4">
-                                            <h3 className="text-sm font-bold text-teal-700 uppercase tracking-wider flex items-center gap-2"><Icons.TrendingUp size={16}/> All Branch Summary</h3>
-                                            <div className="grid grid-cols-2 gap-3 mb-4 border-b pb-3 border-slate-100">
-                                                <div className="bg-logo-green-50 p-3 rounded-lg"><p className="text-xs font-medium text-logo-green-700 uppercase">Combined Revenue</p><p className="text-lg font-bold text-logo-green-900">{formatCurrency(stats.totalRevenue)}</p></div>
-                                                <div className="bg-red-50 p-3 rounded-lg"><p className="text-xs font-medium text-red-700 uppercase">Total Expenses</p><p className="text-lg font-bold text-red-900">{formatCurrency(stats.totalExpenses)}</p></div>
-                                            </div>
-                                            <div className="overflow-x-auto">
-                                                <table className="min-w-full text-xs text-left">
-                                                    <thead className="text-slate-500 uppercase bg-slate-50">
-                                                        <tr>
-                                                            <th className="px-2 py-2">Branch</th>
-                                                            <th className="px-2 py-2 text-right">Net Cash</th>
-                                                            <th className="px-2 py-2 text-right text-red-600">Expenses</th>
-                                                            <th className="px-2 py-2 text-right">Trans.</th>
+                                        <h3 className="text-sm font-bold text-teal-700 uppercase tracking-wider flex items-center gap-2"><Icons.TrendingUp size={16}/> All Branch Summary</h3>
+                                        <div className="grid grid-cols-2 gap-3 mb-4 border-b pb-3 border-slate-100">
+                                            <div className="bg-logo-green-50 p-3 rounded-lg"><p className="text-xs font-medium text-logo-green-700 uppercase">Combined Revenue</p><p className="text-lg font-bold text-logo-green-900">{formatCurrency(stats.totalRevenue)}</p></div>
+                                            <div className="bg-red-50 p-3 rounded-lg"><p className="text-xs font-medium text-red-700 uppercase">Total Expenses</p><p className="text-lg font-bold text-red-900">{formatCurrency(stats.totalExpenses)}</p></div>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full text-xs text-left">
+                                                <thead className="text-slate-500 uppercase bg-slate-50">
+                                                    <tr>
+                                                        <th className="px-2 py-2">Branch</th>
+                                                        <th className="px-2 py-2 text-right">Net Cash</th>
+                                                        <th className="px-2 py-2 text-right text-red-600">Expenses</th>
+                                                        <th className="px-2 py-2 text-right">Trans.</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {branchFinancials.map((b) => (
+                                                        <tr key={b.branch} className="border-b hover:bg-teal-50/50 transition">
+                                                            <td className="px-2 py-2 font-semibold text-slate-700">{b.branch}</td>
+                                                            <td className={`px-2 py-2 text-right font-bold ${b.netCash < 0 ? 'text-red-600' : 'text-logo-green-700'}`}>{formatCurrency(b.netCash)}</td>
+                                                            <td className="px-2 py-2 text-right text-red-500">{formatCurrency(b.totalExpenses)}</td>
+                                                            <td className="px-2 py-2 text-right text-slate-500">{b.count}</td>
                                                         </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {branchFinancials.map((b) => (
-                                                            <tr key={b.branch} className="border-b hover:bg-teal-50/50 transition">
-                                                                <td className="px-2 py-2 font-semibold text-slate-700">{b.branch}</td>
-                                                                <td className={`px-2 py-2 text-right font-bold ${b.netCash < 0 ? 'text-red-600' : 'text-logo-green-700'}`}>{formatCurrency(b.netCash)}</td>
-                                                                <td className="px-2 py-2 text-right text-red-500">{formatCurrency(b.totalExpenses)}</td>
-                                                                <td className="px-2 py-2 text-right text-slate-500">{b.count}</td>
-                                                            </tr>
-                                                        ))}
-                                                        <tr className="bg-logo-green-100 font-extrabold text-sm text-logo-green-900 border-t-2 border-logo-green-700">
-                                                            <td className="px-2 py-2">GRAND TOTAL</td>
-                                                            <td className={`px-2 py-2 text-right ${stats.netCash < 0 ? 'text-red-600 font-bold' : ''}`}>{formatCurrency(stats.netCash)}</td>
-                                                            <td className="px-2 py-2 text-right text-red-600">{formatCurrency(stats.totalExpenses)}</td>
-                                                            <td className="px-2 py-2 text-right">{transactions.length}</td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                                    ))}
+                                                    <tr className="bg-logo-green-100 font-extrabold text-sm text-logo-green-900 border-t-2 border-logo-green-700">
+                                                        <td className="px-2 py-2">GRAND TOTAL</td>
+                                                        <td className={`px-2 py-2 text-right ${stats.netCash < 0 ? 'text-red-600 font-bold' : ''}`}>{formatCurrency(stats.netCash)}</td>
+                                                        <td className="px-2 py-2 text-right text-red-600">{formatCurrency(stats.totalExpenses)}</td>
+                                                        <td className="px-2 py-2 text-right">{transactions.length}</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 )}
                                 {/* END ALL BRANCH SUMMARY */}
@@ -2314,37 +2430,37 @@
                                         <p className="text-sm text-slate-400 italic text-center py-2">No completed activity yet.</p>
                                     ) : (
                                         Object.keys(therapistStats).sort((a, b) => {
-                                             const idxA = BRANCHES.indexOf(a);
-                                             const idxB = BRANCHES.indexOf(b);
-                                             if (idxA === -1 && idxB === -1) return a.localeCompare(b);
-                                             if (idxA === -1) return 1;
-                                             if (idxB === -1) return -1;
-                                             return idxA - idxB;
-                                          }).map(branch => (
-                                            <div key={branch} className="mb-4 last:mb-0">
-                                                {(user.currentBranch === 'ALL' || Object.keys(therapistStats).length > 1) && (
-                                                    <h4 className="text-[10px] font-bold text-logo-green-700 uppercase mb-2 bg-logo-green-50 px-2 py-1 rounded inline-block">
-                                                        {branch}
-                                                    </h4>
-                                                )}
-                                                <div className="space-y-2">
-                                                    {therapistStats[branch].map((s) => (
-                                                        <div key={s.name} className="flex justify-between items-center pb-2 border-b border-slate-50 last:border-0 last:pb-0 ml-1">
-                                                            <div className="flex gap-2 items-center">
-                                                                <span className="w-6 h-6 bg-logo-green-100 text-logo-green-700 rounded-full flex items-center justify-center text-[10px] font-bold">{s.name.charAt(0)}</span>
-                                                                <span className="text-sm font-semibold text-slate-700">{s.name}</span>
+                                               const idxA = BRANCHES.indexOf(a);
+                                               const idxB = BRANCHES.indexOf(b);
+                                               if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                                               if (idxA === -1) return 1;
+                                               if (idxB === -1) return -1;
+                                               return idxA - idxB;
+                                            }).map(branch => (
+                                                <div key={branch} className="mb-4 last:mb-0">
+                                                    {(user.currentBranch === 'ALL' || Object.keys(therapistStats).length > 1) && (
+                                                        <h4 className="text-[10px] font-bold text-logo-green-700 uppercase mb-2 bg-logo-green-50 px-2 py-1 rounded inline-block">
+                                                            {branch}
+                                                        </h4>
+                                                    )}
+                                                    <div className="space-y-2">
+                                                        {therapistStats[branch].map((s) => (
+                                                            <div key={s.name} className="flex justify-between items-center pb-2 border-b border-slate-50 last:border-0 last:pb-0 ml-1">
+                                                                <div className="flex gap-2 items-center">
+                                                                    <span className="w-6 h-6 bg-logo-green-100 text-logo-green-700 rounded-full flex items-center justify-center text-[10px] font-bold">{s.name.charAt(0)}</span>
+                                                                    <span className="text-sm font-semibold text-slate-700">{s.name}</span>
+                                                                </div>
+                                                                <div className="text-right flex flex-col">
+                                                                    <span className="text-sm font-bold text-logo-green-700 flex items-center gap-1">
+                                                                        <Icons.TrendingUp size={12} className="text-teal-600"/> {formatCurrency(s.commission)}  
+                                                                    </span>
+                                                                    <span className="text-[9px] text-slate-400">({s.rate}% of {formatCurrency(s.amount)})</span>
+                                                                </div>
                                                             </div>
-                                                            <div className="text-right flex flex-col">
-                                                                <span className="text-sm font-bold text-logo-green-700 flex items-center gap-1">
-                                                                    <Icons.TrendingUp size={12} className="text-teal-600"/> {formatCurrency(s.commission)}  
-                                                                </span>
-                                                                <span className="text-[9px] text-slate-400">({s.rate}% of {formatCurrency(s.amount)})</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                          ))
+                                            ))
                                     )}
                                 </div>
 
@@ -2366,7 +2482,7 @@
                                                 </button>
                                             )}
                                             {/* 'End Day' button is visible if the user is in a specific branch (Admin or Staff) */}
-                                            {user.currentBranch !== 'ALL' && (
+                                            {user.currentBranch !== 'ALL' && dashboardDate <= getTodayStr() && (
                                                 <button onClick={requestEndDay} className="text-[10px] font-bold text-logo-green-700 bg-logo-green-50 px-3 py-1.5 rounded-full border border-logo-green-200 flex gap-1"><Icons.Archive size={12}/> End Day</button>
                                             )}
                                         </div>
@@ -2386,7 +2502,7 @@
                                     {filteredTransactions.length > 50 && (
                                         <div className="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4 mb-4 text-sm flex justify-between items-center rounded-r shadow-sm">
                                             <span><span className="font-bold">Performance Alert:</span> You have {filteredTransactions.length} active records. End the day to archive and speed up the app.</span>
-                                            {user.currentBranch !== 'ALL' && <button onClick={requestEndDay} className="underline font-bold hover:text-orange-900 ml-2 whitespace-nowrap">End Day Now</button>}
+                                            {user.currentBranch !== 'ALL' && dashboardDate <= getTodayStr() && <button onClick={requestEndDay} className="underline font-bold hover:text-orange-900 ml-2 whitespace-nowrap">End Day Now</button>}
                                         </div>
                                     )}
 
@@ -2397,18 +2513,18 @@
                                                     t.type === 'expense' ? 'border-l-red-500' : (t.status==='completed'?'border-l-logo-green-500':'border-l-orange-400')
                                                 } shadow-sm`}>
                                                     <div className="flex-1 pr-4">
-                                                        <div className="flex gap-2 mb-1 items-center">
+                                                        <div className="flex gap-2 mb-1 items-center flex-wrap">
                                                             <span className="text-[10px] font-bold bg-slate-100 px-2 rounded text-slate-500">{t.branch}</span>
                                                             <span className="text-xs font-mono text-slate-400">{t.bookingDate || formatDate(t.timestamp)} - {t.time}</span>
                                                             {/* Home Service Badge */}
                                                             {t.location === 'home' && (
-                                                                <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 rounded flex items-center gap-1">
+                                                                <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded flex items-center gap-1">
                                                                     <Icons.Car size={10}/> Home {t.driver && <span className="font-normal text-blue-600">via {t.driver}</span>}
                                                                 </span>
                                                             )}
-                                                            {/* ADDED: Room Badge */}
+                                                            {/* Room Badge */}
                                                             {t.location !== 'home' && t.room && (
-                                                                <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 rounded flex items-center gap-1 border border-slate-200">
+                                                                <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded flex items-center gap-1 border border-slate-200">
                                                                     <Icons.DoorOpen size={10}/> Rm: {t.room}
                                                                 </span>
                                                             )}
@@ -2416,7 +2532,6 @@
                                                         
                                                         <h3 className={`font-bold ${t.type === 'expense' ? 'text-red-700' : 'text-slate-800'}`}>
                                                             {t.type === 'expense' ? `Expense: ${t.category}` : t.clientName}
-                                                            {/* ADDED: Display Contact on Dashboard */}
                                                             {t.clientContact && t.type !== 'expense' && <span className="text-xs font-normal text-slate-500 ml-2"><Icons.User size={10} className="inline"/> {t.clientContact}</span>}
                                                         </h3>
                                                         
@@ -2428,7 +2543,12 @@
                                                                     <span>{t.service}</span>
                                                                     {t.duration && <span> • {t.duration}</span>}
                                                                     <span> • {t.therapist}</span>
-                                                                    {/* ADDED: Payment Method Badge */}
+                                                                    {t.discountName && ( // NEW: Discount name display
+                                                                        <span className="ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase bg-orange-100 text-orange-600 border-orange-200">
+                                                                            <Icons.Tag size={8}/> {t.discountName} (-{formatCurrency(t.discountAmount)})
+                                                                        </span>
+                                                                    )}
+                                                                    {/* Payment Method Badge */}
                                                                     {t.paymentMethod && (
                                                                         <span className={`ml-1 flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase ${
                                                                             t.paymentMethod === 'GCash' ? 'bg-blue-50 text-blue-600 border-blue-200' :
@@ -2487,7 +2607,7 @@
                         {view === 'add' && (
                             <div className="bg-white rounded-2xl shadow-sm border border-logo-green-100 p-6 fade-in">
                                 <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Icons.Plus size={24} className="text-logo-green-700"/> New Booking/Sale</h2>
-                                <form onSubmit={handleSubmit} className="space-y-5">
+                                <form onSubmit={(e) => handleSubmit(e, formData.type)} className="space-y-5">
                                     
                                     {/* Conditional Branch Selector for Owner Admin */}
                                     {user.currentBranch === 'ALL' ? (
@@ -2512,8 +2632,8 @@
                                     <div className="relative">
                                         <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase">Booking Date</label>
                                         <Icons.Calendar size={18} className="absolute left-3 top-9 text-slate-400" />
-                                        <input 
-                                            type="date" 
+                                        <input  
+                                            type="date"  
                                             required
                                             value={formData.bookingDate}
                                             onChange={e => setFormData({...formData, bookingDate: e.target.value})}
@@ -2523,15 +2643,15 @@
 
                                     {/* Location Toggle (In Spa / Home Service) */}
                                     <div className="grid grid-cols-2 gap-3 bg-slate-100 p-1.5 rounded-xl">
-                                        <button 
-                                            type="button" 
+                                        <button  
+                                            type="button"  
                                             onClick={() => toggleLocation('spa')}
                                             className={`py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${formData.location === 'spa' ? 'bg-white text-logo-green-700 shadow-sm' : 'text-slate-400'}`}
                                         >
                                             <Icons.Building2 size={16}/> In Spa
                                         </button>
-                                        <button 
-                                            type="button" 
+                                        <button  
+                                            type="button"  
                                             onClick={() => toggleLocation('home')}
                                             className={`py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${formData.location === 'home' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
                                         >
@@ -2539,12 +2659,12 @@
                                         </button>
                                     </div>
 
-                                    {/* Spa Specifics (Room Selection) - ADDED */}
+                                    {/* Spa Specifics (Room Selection) */}
                                     {formData.location === 'spa' && (
                                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 animate-fadeIn">
                                             <label className="text-xs font-bold text-slate-500 mb-1 block flex items-center gap-1"><Icons.DoorOpen size={12}/> Assigned Room</label>
-                                            <select 
-                                                value={formData.room} 
+                                            <select  
+                                                value={formData.room}  
                                                 onChange={e => setFormData({...formData, room: e.target.value})}
                                                 className="w-full p-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-logo-green-500 bg-white appearance-none text-sm"
                                             >
@@ -2563,8 +2683,8 @@
                                                 <div className="relative">
                                                     <span className="absolute left-3 top-3 text-blue-400 font-bold">P</span>
                                                     <input 
-                                                        type="number" 
-                                                        placeholder="0.00" 
+                                                        type="number"  
+                                                        placeholder="0.00"  
                                                         value={formData.transportFee}
                                                         onChange={e => handleTransportChange(e.target.value)}
                                                         className="w-full pl-8 pr-4 py-2 rounded-lg border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
@@ -2585,8 +2705,8 @@
                                                     ))}
                                                 </div>
 
-                                                <select 
-                                                    value="" 
+                                                <select  
+                                                    value=""  
                                                     onChange={e => {
                                                         if(e.target.value) toggleDriverSelection(e.target.value);
                                                     }}
@@ -2609,26 +2729,22 @@
                                     
                                     <div className="space-y-2">
                                         <input required placeholder="Client Name*" value={formData.clientName} onChange={e=>setFormData({...formData, clientName:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
-                                        {/* ADDED: Client Contact Input */}
+                                        {/* Client Contact Input */}
                                         <input placeholder="Client Contact No." value={formData.clientContact} onChange={e=>setFormData({...formData, clientContact:e.target.value})} className="w-full p-3 border rounded-xl bg-slate-50"/>
                                     </div>
                                     
                                     <div className="space-y-4">
                                         
-                                        {/* Duration Dropdown (Global) */}
-                                        <select value={formData.duration} onChange={e=>handleDurationChange(e.target.value)} className="w-full p-3 border rounded-xl bg-slate-50 appearance-none font-bold text-slate-700">
-                                            <option value="" disabled>Select Duration (Applied to all)</option>
-                                            {durationsList.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
-                                        </select>
-
+                                        {/* REMOVED: Duration Dropdown (Global) as requested */}
+                                        
                                         {/* Therapist Dropdown Replacement - Multi Select */}
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-slate-500 uppercase flex justify-between items-center">
-                                                <span>Therapists & Services</span>
+                                                <span>Therapists & Services*</span>
                                                 <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-400">{selectedTherapists.length} Added</span>
                                             </label>
                                             
-                                            {/* Selected Therapists List */}
+                                            {/* Selected Therapists List (Service/Duration/Price per Therapist) */}
                                             {selectedTherapists.length > 0 ? (
                                                 <div className="space-y-3 mb-2">
                                                     {selectedTherapists.map(name => (
@@ -2638,8 +2754,9 @@
                                                                 <button type="button" onClick={() => toggleTherapistSelection(name)} className="text-slate-300 hover:text-red-500 transition"><Icons.X size={18}/></button>
                                                             </div>
                                                             <div className="flex flex-col gap-2">
-                                                                <select 
-                                                                    value={therapistRows[name]?.service || ''} 
+                                                                <select  
+                                                                    required
+                                                                    value={therapistRows[name]?.service || ''}  
                                                                     onChange={(e) => updateTherapistRow(name, 'service', e.target.value)}
                                                                     className="text-xs p-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none w-full"
                                                                 >
@@ -2651,8 +2768,9 @@
                                                                     ))}
                                                                 </select>
                                                                 <div className="grid grid-cols-2 gap-2">
-                                                                    <select 
-                                                                        value={therapistRows[name]?.duration || ''} 
+                                                                    <select  
+                                                                        required
+                                                                        value={therapistRows[name]?.duration || ''}  
                                                                         onChange={(e) => updateTherapistRow(name, 'duration', e.target.value)}
                                                                         className="text-xs p-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none"
                                                                     >
@@ -2661,9 +2779,11 @@
                                                                     </select>
                                                                     <div className="relative">
                                                                         <span className="absolute left-2.5 top-2 text-slate-400 text-xs">P</span>
-                                                                        <input 
+                                                                        <input  
                                                                             type="number" 
-                                                                            value={therapistRows[name]?.amount || ''} 
+                                                                            step="0.01"
+                                                                            required
+                                                                            value={therapistRows[name]?.amount || ''}  
                                                                             onChange={(e) => updateTherapistRow(name, 'amount', e.target.value)}
                                                                             className="w-full text-xs p-2 pl-6 border border-slate-200 rounded-lg bg-slate-50 font-bold text-slate-700 focus:bg-white focus:ring-1 focus:ring-logo-green-500 outline-none"
                                                                             placeholder="0.00"
@@ -2680,13 +2800,13 @@
                                                 </div>
                                             )}
 
-                                            {/* Add Button */}
+                                            {/* Add Therapist Dropdown */}
                                             <div className="relative">
-                                                <select 
-                                                    value="" 
+                                                <select  
+                                                    value=""  
                                                     onChange={e => {
                                                         if(e.target.value) toggleTherapistSelection(e.target.value);
-                                                    }} 
+                                                    }}  
                                                     className="w-full p-3 pl-10 border rounded-xl bg-slate-50 appearance-none hover:bg-slate-100 transition cursor-pointer text-logo-green-700 font-bold"
                                                 >
                                                     <option value="">+ Add Therapist</option>
@@ -2699,6 +2819,25 @@
                                         </div>
                                     </div>
                                     
+                                    {/* Discount Selector */}
+                                    <div className="relative mt-4">
+                                        <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase">Apply Discount (Optional)</label>
+                                        <Icons.Tag size={18} className="absolute left-3 top-9 text-slate-400" />
+                                        <select  
+                                            value={selectedDiscountId}  
+                                            onChange={e => setSelectedDiscountId(e.target.value)}
+                                            className={`w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-logo-green-700 bg-slate-50 focus:bg-white appearance-none text-slate-600 ${selectedDiscountId ? 'border-orange-400 font-bold' : ''}`}
+                                        >
+                                            <option value="">No Discount Applied</option>
+                                            {discountsList.map(d => (
+                                                <option key={d.id} value={d.id}>
+                                                    {d.name} ({d.type === 'Percentage' ? `${d.value}%` : formatCurrency(d.value)})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <Icons.ChevronDown size={16} className="absolute right-3 top-9 text-slate-400 pointer-events-none"/>
+                                    </div>
+
                                     {/* Service Notes Textarea */}
                                     <textarea  
                                         placeholder="Service Notes (e.g., Hard pressure, No oil on back, Client prefers quiet)"  
@@ -2714,23 +2853,25 @@
                                         <div className="text-right">
                                             <p className="text-[10px] text-slate-400 uppercase font-bold">Total Estimate</p>
                                             <p className="text-2xl font-extrabold text-logo-green-700">
-                                                {formatCurrency(
-                                                    selectedTherapists.reduce((acc, name) => acc + (parseFloat(therapistRows[name]?.amount) || 0), 0) + (parseFloat(formData.transportFee) || 0)
-                                                )}
+                                                {formatCurrency(totalEstimatedPrice)}
                                             </p>
+                                            {selectedDiscountId && (
+                                                <p className="text-xs text-orange-600 font-bold">(-{formatCurrency(getAppliedDiscountValue(selectedTherapists.reduce((acc, name) => acc + (parseFloat(therapistRows[name]?.amount) || 0), 0)))})</p>
+                                            )}
                                         </div>
                                     </div>
                                     
-                                    {/* ADDED: Payment Method Selector */}
+                                    {/* Payment Method Selector */}
                                     <div>
                                         <label className="text-xs font-bold text-slate-500 mb-2 block uppercase">Payment Method</label>
                                         <div className="grid grid-cols-3 gap-2">
                                             {[
-                                                { label: 'Cash', icon: <Icons.Banknote size={18}/> }, 
-                                                { label: 'GCash', icon: <Icons.Smartphone size={18}/> }, 
-                                                { label: 'Maya', icon: <Icons.Smartphone size={18}/> }, 
-                                                { label: 'BPI', icon: <Icons.Landmark size={18}/> }, 
-                                                { label: 'Eastwest Bank', icon: <Icons.Landmark size={18}/> }
+                                                { label: 'Cash', icon: <Icons.Banknote size={18}/> },  
+                                                { label: 'GCash', icon: <Icons.Smartphone size={18}/> },  
+                                                { label: 'Maya', icon: <Icons.Smartphone size={18}/> },  
+                                                { label: 'BPI', icon: <Icons.Landmark size={18}/> },  
+                                                { label: 'Eastwest Bank', icon: <Icons.Landmark size={18}/> },
+                                                { label: 'Card', icon: <Icons.CreditCard size={18}/> }
                                             ].map(method => (
                                                 <button
                                                     type="button"
@@ -2742,8 +2883,8 @@
                                                             : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
                                                     }`}
                                                 >
-                                                   {method.icon}
-                                                   <span className="text-center leading-tight">{method.label}</span>
+                                                    {method.icon}
+                                                    <span className="text-center leading-tight">{method.label}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -2811,27 +2952,6 @@
                                 </form>
                             </div>
                         )}
-{view === 'map' && (
-                            <div className="fade-in h-full flex flex-col">
-                                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-full flex flex-col">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h2 className="text-lg font-bold text-slate-800 flex gap-2 items-center">
-                                            <Icons.Map size={20} className="text-logo-green-700"/> Live Fleet Map
-                                        </h2>
-                                        <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1">
-                                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div> 
-                                            {activeDrivers.length} Active
-                                        </span>
-                                    </div>
-                                    <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-200 min-h-[500px]">
-                                        <LiveMap activeDrivers={activeDrivers} />
-                                    </div>
-                                    <p className="text-xs text-slate-400 mt-2 text-center">
-                                        Map updates automatically based on driver GPS signals.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
                         
                         {view === 'profile' && (
                             <div className="bg-white rounded-xl shadow-sm border border-logo-green-100 p-6 fade-in">
@@ -2854,14 +2974,14 @@
                         )}
                         
                         {/* Data List Management View */}
-                        {/* Only visible to admin */}
                         {view === 'lists' && user.role === 'admin' && (  
                             <ListManagement  
                                 therapists={therapistsList}  
                                 services={servicesList}
                                 durations={durationsList}
                                 drivers={driversList}
-                                rooms={roomsList} // Pass rooms
+                                rooms={roomsList} 
+                                discounts={discountsList} // Pass discounts
                                 onAdd={handleAddItem}  
                                 onDelete={handleDeleteItem}
                                 onEdit={handleEditItem}
@@ -2902,7 +3022,6 @@
                                                 <h3 className="font-bold flex items-center">
                                                     {u.name}  
                                                     {u.username === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-logo-green-100 text-logo-green-700 ml-2">OWNER/ADMIN</span>}  
-                                                    {/* Display role names */}
                                                     {u.username !== 'admin' && u.role === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 ml-2">ADMIN</span>}  
                                                     {u.role === 'staff' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-2">STAFF</span>}  
                                                     {/* Online Indicator */}
@@ -2970,7 +3089,7 @@
                                                 className="w-full p-2 border rounded"
                                             />
                                             {/* Role options */}
-                                            <select value={newUser.role} onChange={e=>setNewUser({...newUser, role:e.target.value})} className="w-full p-2 border rounded">
+                                            <select value={newUser.role} onChange={e=>setNewUser({...newUser, role:e.target.value, pin:''})} className="w-full p-2 border rounded">
                                                 <option value="staff">Staff (4-digit PIN)</option>  
                                                 <option value="admin">Admin (6-digit PIN)</option>  
                                             </select>
@@ -3013,15 +3132,10 @@
                                             </div>
                                             {expandedHistoryId===h.id && (
                                                 <div className="bg-slate-50 p-4 border-t text-sm">
-                                                    {/* NEW: Display Therapist Commission Breakdown */}
+                                                    {/* Display Therapist Commission Breakdown */}
                                                     {h.therapist_stats && Object.keys(h.therapist_stats).length > 0 && (
                                                         <div className="mb-4">
                                                             <h4 className="text-xs font-bold text-logo-green-700 uppercase mb-2 flex items-center gap-1"><Icons.Trophy size={12}/> Daily Commission Breakdown:</h4>
-                                                            {/* Check if the archived report contains multiple branches */}
-                                                            {Object.keys(h.therapist_stats).length > 1 && (
-                                                                <h5 className="text-[10px] font-bold text-slate-500 uppercase px-1">{h.branch}</h5>
-                                                            )}
-
                                                             {Object.keys(h.therapist_stats).map(branch => (
                                                                 <div key={branch} className="mb-2 last:mb-0">
                                                                     {Object.keys(h.therapist_stats).length > 1 && (
@@ -3040,7 +3154,7 @@
                                                             <hr className="mt-2"/>
                                                         </div>
                                                     )}
-                                                    {/* END NEW: Display Therapist Commission Breakdown */}
+                                                    {/* END Display Therapist Commission Breakdown */}
 
                                                     <h4 className="text-xs font-bold text-slate-700 uppercase mb-2 flex items-center gap-1"><Icons.ClipboardList size={12}/> Transaction Log:</h4>
                                                     {h.transactions.map((t,i)=><div key={i} className="flex flex-col py-2 border-b last:border-0"><div className="flex justify-between"><span>{t.time} - {t.type==='expense'? t.category : t.clientName} ({t.type === 'expense' ? 'Expense' : t.service})</span><span className={`font-bold ${t.type==='expense'?'text-red-600':'text-logo-green-700'}`}>{formatCurrency(t.amount)}</span></div>{t.notes && t.notes.trim() && <span className="text-xs text-slate-500 italic mt-1">Desc: {t.notes}</span>}</div>)}
