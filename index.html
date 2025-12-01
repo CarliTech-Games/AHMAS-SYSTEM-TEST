@@ -735,7 +735,7 @@
             const [durationsList, setDurationsList] = useState([]);
             const [driversList, setDriversList] = useState([]);  
             const [roomsList, setRoomsList] = useState([]); 
-            const [discountsList, setDiscountsList] = useState([]); // NEW: Discounts List
+            const [discountsList, setDiscountsList] = useState([]); 
             
             const [view, setView] = useState('dashboard');
             const [expandedHistoryId, setExpandedHistoryId] = useState(null);
@@ -759,9 +759,6 @@
             const [formData, setFormData] = useState({
                 clientName: '',  
                 clientContact: '',  
-                service: '',  
-                duration: '',  
-                amount: '',  
                 type: 'booking',  
                 time: new Date().toTimeString().slice(0, 5),
                 targetBranch: '',
@@ -769,7 +766,8 @@
                 category: '',  
                 bookingDate: getTodayStr(),  
                 location: 'spa',  
-                transportFee: '',
+                transportFee: '', // Used for transport fee in booking
+                amount: '', // Used for amount in expense view
                 driver: '',
                 room: '',
                 paymentMethod: 'Cash' 
@@ -938,37 +936,15 @@
                 syncOfflineQueue();
             }, [isOnline, fb, offlineQueue.length]);
 
-
-            // --- 2. DATA SYNC (Listener Management) ---
+            // --- 2a. USER & AUTHENTICATION LISTENER (Always Active) ---
             useEffect(() => {
                 if (!fb || !fbUser) return;
                 const { db, appId } = fb;
                 const basePath = `artifacts/${appId}/public/data`;
                 
                 const getCollection = (name) => db.collection(`${basePath}/${name}`);
-                
-                let unsubTrans = () => {};
-                if (isTransactionListenerActive && view === 'dashboard') {
-                    // Optimized Query for Dashboard (filters by date first, then local client filters apply)
-                    let query = getCollection('transactions');
-                    if (dashboardDate) {
-                        // NOTE: Firestore queries must be on indexed fields. We assume 'bookingDate' is indexed.
-                        query = query.where('bookingDate', '==', dashboardDate);
-                    }
-                    
-                    unsubTrans = query.onSnapshot((snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                            // Client-side sort to avoid complex indexing for order by timestamp
-                            data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
-                            setTransactions(data);
-                            setDbReady(true);
-                        }, (error) => console.error("Sync Error: Transactions", error));
-                } else if (view !== 'dashboard' && isTransactionListenerActive) {
-                    // Turn off listener when not on the dashboard to save reads
-                    setIsTransactionListenerActive(false);
-                }
 
-                // Users
+                // This listener is crucial for login/role management and must run constantly.
                 const unsubUsers = getCollection('users')
                     .onSnapshot(async (snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -976,7 +952,6 @@
                             seedDefaultUsers(db, basePath);
                             return;  
                         }
-                        // Simple pin migration logic (kept from original)
                         const needsUpdate = data.filter(u => (u.username === 'admin' && u.pin.length < 20));
                         for (const u of needsUpdate) {
                              if (u.pin === '8888' || u.pin === '888888') {  
@@ -987,7 +962,59 @@
                         setUsers(data);
                     }, (error) => console.error("Sync Error: Users", error));
 
-                // Master Lists
+                return () => {  
+                    unsubUsers();  
+                };
+            }, [fb, fbUser]);
+
+
+            // --- 2b. TRANSACTION LISTENER (Dashboard Only) ---
+            useEffect(() => {
+                // Only run when on dashboard and authenticated
+                if (!fb || !fbUser || view !== 'dashboard') return () => {};
+                const { db, appId } = fb;
+                const basePath = `artifacts/${appId}/public/data`;
+                const getCollection = (name) => db.collection(`${basePath}/${name}`);
+                
+                let unsubTrans = () => {};
+                if (isTransactionListenerActive) {
+                    let query = getCollection('transactions');
+                    if (dashboardDate) {
+                        query = query.where('bookingDate', '==', dashboardDate);
+                    }
+                    
+                    unsubTrans = query.onSnapshot((snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            data.sort((a, b) => getMillis(b.timestamp) - getMillis(a.timestamp));
+                            setTransactions(data);
+                            setDbReady(true);
+                        }, (error) => console.error("Sync Error: Transactions", error));
+                }
+
+                return () => {  
+                    unsubTrans();
+                };
+            }, [fb, fbUser, isTransactionListenerActive, view, dashboardDate]);  
+
+            
+            // --- 2c. MASTER DATA LISTENER (Lists/Add/Expense/Team Views Only) ---
+            // Listener only runs when these views are active to save reads.
+            useEffect(() => {
+                if (!fb || !fbUser || !['add', 'expense', 'lists', 'team'].includes(view)) {
+                    // Clear data when listener is not active to save memory/prevent stale data
+                    setTherapistsList([]);
+                    setServicesList([]);
+                    setDurationsList([]);
+                    setDriversList([]);
+                    setRoomsList([]);
+                    setDiscountsList([]);
+                    return () => {};
+                }
+                
+                const { db, appId } = fb;
+                const basePath = `artifacts/${appId}/public/data`;
+                const getCollection = (name) => db.collection(`${basePath}/${name}`);
+
                 const unsubTherapists = getCollection('therapists')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1010,18 +1037,15 @@
                         }));
                     });
 
-                // Drivers Listener
                 const unsubDrivers = getCollection('drivers')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setDriversList(data.sort((a, b) => a.name.localeCompare(b.name)));
                     }, (error) => console.error("Sync Error: Drivers", error));
 
-                // Rooms Listener
                 const unsubRooms = getCollection('rooms')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        // Sort numerically if names are numbers, otherwise alphabetically
                         setRoomsList(data.sort((a, b) => {
                             const valA = parseInt(a.name);
                             const valB = parseInt(b.name);
@@ -1030,7 +1054,6 @@
                         }));
                     }, (error) => console.error("Sync Error: Rooms", error));
                     
-                // NEW: Discounts Listener
                 const unsubDiscounts = getCollection('discounts')
                     .onSnapshot((snapshot) => {
                         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1038,23 +1061,21 @@
                     }, (error) => console.error("Sync Error: Discounts", error));
                 
                 return () => {  
-                    unsubTrans();  
-                    unsubUsers();  
                     unsubTherapists();  
                     unsubServices();
                     unsubDurations();
                     unsubDrivers();
                     unsubRooms(); 
-                    unsubDiscounts(); // Cleanup discounts
+                    unsubDiscounts(); 
                 };
-            }, [fb, fbUser, isTransactionListenerActive, view, dashboardDate]);  
+            }, [fb, fbUser, view]);  
 
 
-            // --- 2b. LAZY LOAD HISTORY ---
+            // --- 2d. HISTORY LISTENER (History View Only) ---
             useEffect(() => {
                 if (!fb || !fbUser || view !== 'history') {
                     if (history.length > 0) setHistory([]);  
-                    return;
+                    return () => {};
                 }
                 
                 const { db, appId } = fb;
@@ -1073,7 +1094,7 @@
                 return () => unsub();
             }, [fb, fbUser, view]);  
 
-            // --- 2c. REAL-TIME USER ROLE SYNC ---
+            // --- 2e. REAL-TIME USER ROLE SYNC (depends on 2a) ---
             useEffect(() => {
                 if (user && users.length > 0) {
                     const freshData = users.find(u => u.id === user.id);
@@ -1087,23 +1108,7 @@
                 }
             }, [users, user]);
             
-            // --- 2d. PRESENCE SYSTEM ---
-            useEffect(() => {
-                if (!user || !fb) return;
-                
-                const updatePresence = () => {
-                    const basePath = `artifacts/${fb.appId}/public/data`;
-                    fb.db.collection(`${basePath}/users`).doc(user.id).update({
-                        lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-                        currentBranch: user.currentBranch  
-                    }).catch(err => console.error("Presence update failed", err));
-                };
-
-                updatePresence();  
-                const interval = setInterval(updatePresence, 60000);  
-
-                return () => clearInterval(interval);
-            }, [user, fb]);
+            // --- 2f. REMOVED: PRESENCE SYSTEM (To reduce writes) ---
 
             const isUserOnline = (lastActive) => {
                 if (!lastActive) return false;
@@ -1201,8 +1206,8 @@
                     data = data.filter(t => t.recordedBy === user.name);
                 }
                 
-                // Dashboard filter is already applied via Firestore listener in useEffect 2.
-                // We keep this filter just in case the listener is paused (isTransactionListenerActive=false)
+                // Dashboard filter is already applied via Firestore listener in useEffect 2b.
+                // This local filter is only necessary if the listener is paused/date changed.
                 if (view === 'dashboard' && dashboardDate) {
                     data = data.filter(t => {
                         let recordDateStr = '';
@@ -1365,10 +1370,7 @@
                                 let baseAmount = Number(t.amount);
                                 // The archived record contains the split transportFee, so we subtract it to get the commissionable base.
                                 if(t.transportFee) baseAmount -= Number(t.transportFee);
-                                // NOTE: The commissionable base here should be AFTER the discount, but since we save the post-discount amount in `t.amount`
-                                // and the split transport fee is already small, we rely on the final archived commission stats
-                                // which calculates the commission based on the saved service price in the archived transaction.
-                                // We rely on the archived therapistStats for the correct rate in this CSV utility.
+                                // We use the archived rate here to be consistent with the archived stats
                                 return (baseAmount * (therapistData.rate / 100)).toFixed(2);
                             }
                         }
@@ -1401,8 +1403,8 @@
                         `"${t.location === 'home' ? 'Home Service' : 'In Spa'}"`,
                         `"${t.room || ''}"`,  
                         `"${t.paymentMethod || 'Cash'}"`, 
-                        `"${t.discountName || ''}"`, // NEW: Discount Name
-                        Number(t.discountAmount || 0).toFixed(2), // NEW: Discount Amount
+                        `"${t.discountName || ''}"`, 
+                        Number(t.discountAmount || 0).toFixed(2), 
                         Number(t.transportFee || 0).toFixed(2),
                         Number(t.amount).toFixed(2),  
                         commissionAmount,  
@@ -1687,10 +1689,11 @@
                         
                         const loggedUser = { ...found, currentBranch: loginBranch };
                         
+                        // FIX: Update currentBranch on user document upon successful login, but DO NOT update lastActive continuously
                         const basePath = `artifacts/${fb.appId}/public/data`;
                         await fb.db.collection(`${basePath}/users`).doc(found.id).update({  
                             currentBranch: loginBranch,
-                            lastActive: firebase.firestore.FieldValue.serverTimestamp()  
+                            lastActive: firebase.firestore.FieldValue.serverTimestamp() // Initial login stamp only
                         });
 
                         setUser(loggedUser);
@@ -1723,38 +1726,37 @@
             };
 
             const handleServiceChange = (serviceName) => {
+                // This function is no longer really needed since the change is handled row-by-row, but kept for legacy/safety.
+                // It should be safe as it only updates an unused global field (formData.service)
                 setFormData({ ...formData, service: serviceName });
             };
-
-            // NOTE: handleDurationChange removed as it is no longer used globally
-            // const handleDurationChange = (durationName) => {
-            //     setFormData({ ...formData, duration: durationName });
-            // };
             
             const handleTransportChange = (val) => {
                 setFormData({ ...formData, transportFee: val });
             };
+
+            const handleExpenseAmountChange = (val) => {
+                setFormData({ ...formData, amount: val });
+            };
             
             const toggleLocation = (loc) => {
                 let newTransport = formData.transportFee;
-                let newDriver = formData.driver;
                 let newRoom = formData.room;
 
                 if (loc === 'spa') {
                     newTransport = '';  
-                    newDriver = ''; 
                     setSelectedDrivers([]);
                 } else {
                     newRoom = ''; 
                 }
                 
-                setFormData({
-                    ...formData,
+                setFormData(prev => ({
+                    ...prev,
                     location: loc,
                     transportFee: newTransport,
-                    driver: newDriver, 
+                    driver: '',
                     room: newRoom, 
-                });
+                }));
             };
 
             const handleSubmit = async (e, typeOverride = null) => {
@@ -1772,6 +1774,12 @@
                             setModal({ isOpen: true, type: 'alert', title: 'Missing Information', message: 'Please provide Amount, Category, and Description (Notes) for the expense.', onConfirm: closeModal, confirmColor: 'red' });
                             return;
                     }
+                    const expenseAmount = parseFloat(formData.amount);
+                     if (isNaN(expenseAmount) || expenseAmount <= 0) {
+                        setModal({ isOpen: true, type: 'alert', title: 'Invalid Amount', message: 'Expense amount must be a positive number.', onConfirm: closeModal, confirmColor: 'red' });
+                        return;
+                    }
+
                 } else {
                     // Booking/Sale Validation
                     if (!formData.clientName) {
@@ -1818,11 +1826,6 @@
                     }
                 }
                 
-                let baseAmount = parseFloat(formData.amount);
-                if (transactionType === 'expense') {
-                    baseAmount = -Math.abs(baseAmount);
-                }
-
                 // --- DISCOUNT CALCULATION ---
                 const totalServicePrice = selectedTherapists.reduce((acc, name) => acc + (parseFloat(therapistRows[name]?.amount) || 0), 0);
                 const discountAmount = getAppliedDiscountValue(totalServicePrice);
@@ -1840,7 +1843,7 @@
                         clientName: formData.category,  
                         description: formData.notes,  
                         category: formData.category,  
-                        amount: baseAmount,
+                        amount: -Math.abs(parseFloat(formData.amount)), // Use formData.amount for expense
                         type: transactionType,
                         status: 'completed',
                         time: formData.time,
@@ -1869,6 +1872,10 @@
                         // Final amount saved = discounted service price + split transport fee
                         const finalRowAmount = discountedServicePrice + splitTransport;
 
+                        // FIX: Calculate the proportional discount amount for this specific row
+                        const proportionalDiscountAmount = rowServicePrice * effectiveDiscountRate;
+
+
                         transactionsToSave.push({
                             clientName: formData.clientName,  
                             clientContact: formData.clientContact,  
@@ -1889,9 +1896,10 @@
                             driver: formData.location === 'home' ? driverString : '',
                             room: formData.location === 'spa' ? formData.room : '',
                             paymentMethod: formData.paymentMethod, 
-                            // Save discount details to the *first* transaction or all for completeness
+                            
+                            // FIXED: Save the discount name and the proportional discount amount for this specific record
                             discountName: discountName, 
-                            discountAmount: discountAmount, 
+                            discountAmount: proportionalDiscountAmount, 
                         });
                     });
                 }
@@ -1908,7 +1916,7 @@
                     setOfflineQueue(prev => [...prev, ...offlineItems]);
                     
                     resetForm(transactionBranch);
-                    setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionsToSave.length} records queued. They will sync automatically when online.`, onConfirm: closeModal, confirmColor: 'orange' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Saved Offline', message: `${transactionsToSave.length} records queued. They will sync automatically when online.`, confirmColor: 'orange', onConfirm: closeModal });
                     return;
                 }
 
@@ -1925,12 +1933,12 @@
 
                     resetForm(transactionBranch);
                     
-                    setModal({ isOpen: true, type: 'alert', title: 'Saved!', message: `${transactionsToSave.length} record(s) saved for ${transactionBranch}.`, onConfirm: closeModal, confirmColor: 'logo-green' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Saved!', message: `${transactionsToSave.length} record(s) saved for ${transactionBranch}.`, confirmColor: 'logo-green', onConfirm: closeModal });
 
                     setDashboardDate(formData.bookingDate); 
                     setView('dashboard');
                 } catch (error) {
-                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to save. Check connection.', onConfirm: closeModal, confirmColor: 'red' });
+                    setModal({ isOpen: true, type: 'alert', title: 'Error', message: 'Failed to save. Check connection.', confirmColor: 'red', onConfirm: closeModal });
                 } finally {
                     setIsGlobalLoading(false);
                 }
@@ -1939,11 +1947,19 @@
             const resetForm = (branch) => {
                 const resetTargetBranch = user.currentBranch === 'ALL' ? branch : user.currentBranch;
                 setFormData({  
-                    clientName: '', clientContact: '', service: '', duration: '', therapist: '', amount: '',  
-                    type: 'booking', time: new Date().toTimeString().slice(0, 5),
-                    targetBranch: resetTargetBranch, notes: '', category: '',
+                    clientName: '', 
+                    clientContact: '', 
+                    type: 'booking', 
+                    time: new Date().toTimeString().slice(0, 5),
+                    targetBranch: resetTargetBranch, 
+                    notes: '', 
+                    category: '',
                     bookingDate: new Date().toISOString().split('T')[0],
-                    location: 'spa', transportFee: '', driver: '', room: '',
+                    location: 'spa', 
+                    transportFee: '', 
+                    amount: '', // Reset expense amount
+                    driver: '', 
+                    room: '',
                     paymentMethod: 'Cash' 
                 });
                 setSelectedTherapists([]); 
@@ -1968,10 +1984,8 @@
             };
 
             const requestDelete = (id) => {
-                if (user?.role !== 'admin') {  
-                    setModal({ isOpen: true, type: 'alert', title: 'Access Denied', message: 'Only Admin can delete.', onConfirm: closeModal, confirmColor: 'red' });  
-                    return;
-                }
+                if (user?.role !== 'admin') return;  
+
                 setModal({
                     isOpen: true, type: 'confirm', title: 'Delete Record?', message: 'Permanently remove from cloud?', confirmColor: 'red',
                     onConfirm: async () => {
@@ -2019,7 +2033,7 @@
                             await historyColl.add({
                                 date: dashboardDate,  
                                 date_formatted: new Date(dashboardDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-                                timestamp: new Date().toLocaleString(),
+                                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                                 timestamp_val: firebase.firestore.FieldValue.serverTimestamp(),
                                 transactions: filteredTransactions,
                                 stats: stats,
@@ -2329,11 +2343,7 @@
                             {user.role === 'admin' && (
                                 <button onClick={()=>setView('team')} className={`flex-1 min-w-[70px] py-2.5 text-xs font-semibold rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1 ${view==='team'?'bg-white text-logo-green-700 shadow-sm':'text-slate-500'} relative`}>
                                     <Icons.Users size={16}/> Team
-                                    {(() => {
-                                        if (user.username !== 'admin') return null;
-                                        const count = users.filter(u => isUserOnline(u.lastActive)).length;
-                                        return count > 0 ? <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white animate-pulse">{count}</span> : null;
-                                    })()}
+                                    {/* Removed real-time online count to save reads */}
                                 </button>
                             )}
                         </div>
@@ -2735,8 +2745,6 @@
                                     
                                     <div className="space-y-4">
                                         
-                                        {/* REMOVED: Duration Dropdown (Global) as requested */}
-                                        
                                         {/* Therapist Dropdown Replacement - Multi Select */}
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-slate-500 uppercase flex justify-between items-center">
@@ -2935,8 +2943,8 @@
                                         type="number" step="0.01"  
                                         min="0.01"
                                         placeholder="Amount Spent (P)*"  
-                                        value={formData.amount}  
-                                        onChange={e=>setFormData({...formData, amount:e.target.value})}  
+                                        value={formData.amount}
+                                        onChange={handleExpenseAmountChange}
                                         className="w-full p-3 border rounded-xl bg-slate-50 border-red-300 font-bold"
                                     />
                                     
@@ -3005,12 +3013,7 @@
                                         return u.currentBranch === user.currentBranch;
                                     })
                                     .sort((a, b) => {
-                                        // Sort by Online status first
-                                        const aOnline = isUserOnline(a.lastActive);
-                                        const bOnline = isUserOnline(b.lastActive);
-                                        if (aOnline && !bOnline) return -1;
-                                        if (!aOnline && bOnline) return 1;
-                                        // Then by Name
+                                        // Sort by Online status first (we no longer track real-time activity, so just sort by name)
                                         return a.name.localeCompare(b.name);
                                     })
                                     .map(u=>(
@@ -3024,12 +3027,6 @@
                                                     {u.username === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-logo-green-100 text-logo-green-700 ml-2">OWNER/ADMIN</span>}  
                                                     {u.username !== 'admin' && u.role === 'admin' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 ml-2">ADMIN</span>}  
                                                     {u.role === 'staff' && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-2">STAFF</span>}  
-                                                    {/* Online Indicator */}
-                                                    {isUserOnline(u.lastActive) && (
-                                                        <span className="ml-2 flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-200 animate-pulse">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Online
-                                                        </span>
-                                                    )}
                                                 </h3>
                                                 <p className="text-xs text-slate-400">
                                                     @{u.username} • {u.currentBranch || 'Unknown Branch'}
