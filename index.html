@@ -1455,6 +1455,37 @@
                 return null;
             }
 
+            // Helper to calculate price based on service/duration (used in form logic)
+            const calculatePrice = (serviceName, durationName, transport = 0) => {
+                let basePrice = 0;
+                
+                if (serviceName) {
+                    const foundService = servicesList.find(s => s.name === serviceName);
+                    if (foundService) {
+                        if (durationName && foundService.prices && foundService.prices[durationName]) {
+                            basePrice = foundService.prices[durationName];
+                        } 
+                        else if (foundService.price) {
+                            basePrice = foundService.price;
+                        }
+                    }
+                }
+                
+                // Return only the base price without transport here, as transport is added separately in totalEstimatedPrice
+                return basePrice;
+            };
+
+            // Helper to handle transport fee change
+            const handleTransportChange = (val) => {
+                const transport = parseFloat(val) || 0;
+                setFormData(prev => ({ ...prev, transportFee: val }));
+                // Note: Total estimated price recalculation relies on the useMemo hook, not an immediate update here
+            };
+
+            // Helper for expense amount change
+            const handleExpenseAmountChange = (e) => {
+                setFormData(prev => ({ ...prev, amount: e.target.value }));
+            };
 
             // --- 4. ACTIONS ---
 
@@ -1547,7 +1578,7 @@
                         const sName = field === 'service' ? value : (updatedRow.service || '');
                         const dName = field === 'duration' ? value : (updatedRow.duration || '');
                         
-                        // Calculate only the RAW service price (0 transport)
+                        // Recalculate based on newly defined calculatePrice
                         updatedRow.amount = calculatePrice(sName, dName, 0);
                     }
 
@@ -2841,7 +2872,7 @@
                                                         type="number"  
                                                         placeholder="0.00"  
                                                         value={formData.transportFee}
-                                                        onChange={e => handleTransportChange(e.target.value)}
+                                                        onChange={handleTransportChange}
                                                         className="w-full pl-8 pr-4 py-2 rounded-lg border border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                                                     />
                                                 </div>
@@ -3089,7 +3120,7 @@
                                         min="0.01"
                                         placeholder="Amount Spent (P)*"  
                                         value={formData.amount}
-                                        onChange={e=>setFormData({...formData, amount:e.target.value})}
+                                        onChange={handleExpenseAmountChange}
                                         className="w-full p-3 border rounded-xl bg-slate-50 border-red-300 font-bold"
                                     />
                                     
